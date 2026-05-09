@@ -1,57 +1,28 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, X, MoreVertical, CheckCircle, BookUser } from 'lucide-react';
+import { Plus, X, MoreVertical, CheckCircle, BookUser, Loader } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
-const initialContacts = [
-  {
-    id: 1, name: 'Sarah Kim', email: 'sarah@lumenco.com', phone: '+65 9123 4567',
-    company: 'Lumen Co', lastInteraction: '2 Apr 2026', tags: ['Client', 'Active'],
-    jobTitle: 'Brand Manager', status: 'Connected', notes: 'Key decision maker for brand projects.',
-    ltv: 28500, relationship: 5, lastProject: 'Brand Refresh', lastProjectDate: 'Mar 2026',
-    archived: false,
-  },
-  {
-    id: 2, name: 'James Tan', email: 'james@vertex.com', phone: '+65 9234 5678',
-    company: 'Vertex Inc', lastInteraction: '28 Mar 2026', tags: ['Client'],
-    jobTitle: 'CFO', status: 'Follow Up', notes: '',
-    ltv: 22000, relationship: 4, lastProject: 'Annual Report', lastProjectDate: 'Apr 2026',
-    archived: false,
-  },
-  {
-    id: 3, name: 'Mia Ng', email: 'mia@bloomfoods.sg', phone: '+65 9345 6789',
-    company: 'Bloom Foods', lastInteraction: '20 Mar 2026', tags: ['Client', 'Lead'],
-    jobTitle: 'Marketing Director', status: 'Connected', notes: 'Interested in seasonal campaigns.',
-    ltv: 4200, relationship: 3, lastProject: 'Packaging Design', lastProjectDate: 'Feb 2026',
-    archived: false,
-  },
-  {
-    id: 4, name: 'Ryan Loh', email: 'ryan@kova.io', phone: '+65 9456 7890',
-    company: 'Kova Studio', lastInteraction: '15 Mar 2026', tags: ['Client'],
-    jobTitle: 'Creative Director', status: 'Qualified', notes: '',
-    ltv: 9200, relationship: 4, lastProject: 'Social Media Kit', lastProjectDate: 'Jan 2026',
-    archived: false,
-  },
-  {
-    id: 5, name: 'Chloe Park', email: 'chloe@arko.media', phone: '+82 10 1234 5678',
-    company: 'Arko Media', lastInteraction: '10 Feb 2026', tags: ['Inactive'],
-    jobTitle: 'Producer', status: 'Not Relevant', notes: '',
-    ltv: 7800, relationship: 2, lastProject: 'Motion Graphics', lastProjectDate: 'Nov 2025',
-    archived: false,
-  },
-  {
-    id: 6, name: 'Dave Chen', email: 'dave@novu.tech', phone: '+65 9567 8901',
-    company: 'Novu Tech', lastInteraction: '1 Apr 2026', tags: ['Lead'],
-    jobTitle: 'CEO', status: 'Follow Up', notes: 'Met at DesignSG event.',
-    ltv: 15000, relationship: 3, lastProject: 'Website Redesign', lastProjectDate: 'Apr 2026',
-    archived: false,
-  },
-  {
-    id: 7, name: 'Priya Rajan', email: 'priya@prism.co', phone: '+65 9678 9012',
-    company: 'Prism Labs', lastInteraction: '25 Mar 2026', tags: ['Lead'],
-    jobTitle: 'Head of Marketing', status: 'Qualified', notes: 'Enquired about CGI services.',
-    ltv: 9200, relationship: 2, lastProject: 'CGI Renders', lastProjectDate: 'Mar 2026',
-    archived: false,
-  },
-];
+// Map Supabase row → component shape
+function rowToContact(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email || '',
+    phone: row.phone || '',
+    company: row.company || '',
+    jobTitle: row.job_title || '',
+    website: row.website || '',
+    status: row.status || 'Follow Up',
+    relationship: row.relationship || 3,
+    lastInteraction: row.last_interaction || '',
+    lastProject: row.last_project || '',
+    lastProjectDate: row.last_project_date || '',
+    ltv: Number(row.ltv) || 0,
+    tags: row.tags || [],
+    notes: row.notes || '',
+    archived: row.archived || false,
+  };
+}
 
 const STATUS_OPTS = ['Follow Up', 'Connected', 'Qualified', 'Not Relevant'];
 
@@ -929,7 +900,8 @@ function RadarPanel({ contact, onClose, showToast }) {
 }
 
 export default function Contacts() {
-  const [contacts, setContacts] = useState(initialContacts);
+  const [contacts, setContacts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [editContact, setEditContact] = useState(null);
   const [openMenu, setOpenMenu] = useState(null);
@@ -937,11 +909,24 @@ export default function Contacts() {
   const [toast, setToast] = useState('');
   const [radarContact, setRadarContact] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: '', email: '', phone: '', lastInteraction: '',
     website: '', company: '', jobTitle: '', status: 'Follow Up',
     addToProject: false, notes: '', tags: [],
   });
+
+  useEffect(() => { fetchContacts(); }, []);
+
+  async function fetchContacts() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (!error && data) setContacts(data.map(rowToContact));
+    setLoading(false);
+  }
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -956,36 +941,65 @@ export default function Contacts() {
     setShowNew(true);
   };
 
-  const saveContact = () => {
+  const saveContact = async () => {
     if (!form.name) return;
+    setSaving(true);
     if (editContact) {
-      setContacts(c => c.map(ct => ct.id === editContact.id ? { ...ct, ...form } : ct));
-      showToast('Contact updated!');
+      const update = {
+        name: form.name, email: form.email || null, phone: form.phone || null,
+        company: form.company || null, job_title: form.jobTitle || null,
+        website: form.website || null, status: form.status,
+        last_interaction: form.lastInteraction || null,
+        notes: form.notes || null, tags: form.tags || [],
+      };
+      const { data, error } = await supabase.from('contacts').update(update).eq('id', editContact.id).select().single();
+      if (!error && data) {
+        setContacts(c => c.map(ct => ct.id === editContact.id ? rowToContact(data) : ct));
+        showToast('Contact updated!');
+      }
     } else {
-      setContacts(c => [...c, { id: Date.now(), ...form, ltv: 0, relationship: 3, lastProject: '', lastProjectDate: '', archived: false }]);
-      showToast('Contact added!');
+      const { data: { user } } = await supabase.auth.getUser();
+      const insert = {
+        user_id: user.id,
+        name: form.name, email: form.email || null, phone: form.phone || null,
+        company: form.company || null, job_title: form.jobTitle || null,
+        website: form.website || null, status: form.status,
+        last_interaction: form.lastInteraction || null,
+        notes: form.notes || null, tags: form.tags || [],
+        relationship: 3, ltv: 0,
+      };
+      const { data, error } = await supabase.from('contacts').insert(insert).select().single();
+      if (!error && data) {
+        setContacts(c => [rowToContact(data), ...c]);
+        showToast('Contact added!');
+      }
     }
+    setSaving(false);
     setShowNew(false);
   };
 
-  const deleteContact = (id) => {
+  const deleteContact = async (id) => {
     setContacts(c => c.filter(ct => ct.id !== id));
+    await supabase.from('contacts').delete().eq('id', id);
     setOpenMenu(null);
   };
 
-  const archiveContact = (id) => {
+  const archiveContact = async (id) => {
     setContacts(c => c.map(ct => ct.id === id ? { ...ct, archived: true } : ct));
+    await supabase.from('contacts').update({ archived: true }).eq('id', id);
     setOpenMenu(null);
     showToast('Contact archived.');
   };
 
-  const changeStatus = (id, status) => {
+  const changeStatus = async (id, status) => {
     setContacts(c => c.map(ct => ct.id === id ? { ...ct, status } : ct));
+    await supabase.from('contacts').update({ status }).eq('id', id);
     showToast('Status updated!');
   };
 
-  const changeRelationship = (id, value) => {
+  const changeRelationship = async (id, value) => {
     setContacts(c => c.map(ct => ct.id === id ? { ...ct, relationship: value } : ct));
+    await supabase.from('contacts').update({ relationship: value }).eq('id', id);
   };
 
   const visibleContacts = contacts.filter(c => showArchived ? true : !c.archived);
@@ -1010,7 +1024,12 @@ export default function Contacts() {
         </label>
       </div>
 
-      {visibleContacts.length === 0 ? (
+      {loading ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 80, gap: 12, color: 'var(--slate-400)' }}>
+          <Loader size={20} style={{ animation: 'spin 1s linear infinite' }} /> Loading contacts…
+          <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+        </div>
+      ) : visibleContacts.length === 0 ? (
         <div className="table-container">
           <div className="empty-state">
             <div className="empty-state-icon"><BookUser size={48} /></div>
@@ -1191,10 +1210,11 @@ export default function Contacts() {
             </div>
             <div className="slide-panel-footer">
               <button className="btn btn-secondary" onClick={() => setShowNew(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={saveContact}>
-                {editContact ? 'Save Changes' : 'Add Contact'}
+              <button className="btn btn-primary" onClick={saveContact} disabled={saving}>
+                {saving ? <><Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</> : (editContact ? 'Save Changes' : 'Add Contact')}
               </button>
             </div>
+            <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
           </div>
         </>
       )}

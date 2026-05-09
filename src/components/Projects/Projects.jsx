@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Plus, MoreVertical, Calendar, Clock, Archive, Cpu, Trash2, X, FolderKanban
+  Plus, MoreVertical, Calendar, Clock, Archive, Cpu, Trash2, X, FolderKanban, Loader
 } from 'lucide-react';
 import ProjectDetail from './ProjectDetail';
+import { supabase } from '../../lib/supabase';
 
 const STAGES = ['New', 'Discovery', 'Proposal', 'Contract Signed', 'Kick Off', 'Onboarding', 'Planning', 'Delivery', 'Completed'];
 const SERVICE_TYPES = ['Advertising', 'Corporate', 'Marketing', 'Packaging', 'Photoshoot', 'Social Media', 'Print', 'Digital', 'Production', 'Visualisation', 'CGI', 'Motion', 'Others'];
@@ -43,22 +44,26 @@ function getTagStyle(tag) {
   return { background: '#f3f4f6', color: '#4b5563' };
 }
 
-const initialProjects = [
-  { id: 1, name: 'Brand Refresh – Lumen Co', client: 'Lumen Co', stage: 'Delivery', tags: ['On Track'], date: '10 Apr 2026', value: 8500, hours: 24, description: '' },
-  { id: 2, name: 'Annual Report – Vertex Inc', client: 'Vertex Inc', stage: 'Planning', tags: ['In Review'], date: '18 Apr 2026', value: 12000, hours: 32, description: '' },
-  { id: 3, name: 'Packaging Design – Bloom Foods', client: 'Bloom Foods', stage: 'Proposal', tags: ['Sent'], date: '22 Apr 2026', value: 4200, hours: 8, description: '' },
-  { id: 4, name: 'Social Media Kit – Kova Studio', client: 'Kova Studio', stage: 'Kick Off', tags: ['Active'], date: '28 Apr 2026', value: 3600, hours: 12, description: '' },
-  { id: 5, name: 'Website Redesign – Novu Tech', client: 'Novu Tech', stage: 'Discovery', tags: ['Met'], date: '5 May 2026', value: 15000, hours: 6, description: '' },
-  { id: 6, name: 'Motion Graphics – Arko', client: 'Arko Media', stage: 'Contract Signed', tags: ['Active'], date: '12 May 2026', value: 7800, hours: 18, description: '' },
-  { id: 7, name: 'Catalogue – Hiro Furniture', client: 'Hiro Co', stage: 'Onboarding', tags: ['In Progress'], date: '20 May 2026', value: 5500, hours: 10, description: '' },
-  { id: 8, name: 'CGI Renders – Prism', client: 'Prism Labs', stage: 'New', tags: ['Warm Lead'], date: '1 Jun 2026', value: 9200, hours: 0, description: '' },
-  { id: 9, name: 'Campaign – Nuri Coffee', client: 'Nuri Coffee', stage: 'Completed', tags: ['Great Experience'], date: '15 Mar 2026', value: 6400, hours: 38, description: '' },
-  { id: 10, name: 'Pitch Deck – Slate VC', client: 'Slate VC', stage: 'Proposal', tags: ['Under Review'], date: '28 Mar 2026', value: 3200, hours: 5, description: '' },
-];
-
-const existingContacts = [
-  'Sarah Kim', 'James Tan', 'Mia Ng', 'Ryan Loh', 'Chloe Park', 'Dave Chen', 'Priya Rajan',
-];
+// Map Supabase row → component shape
+function rowToProject(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    client: row.client || '',
+    stage: row.stage || 'New',
+    tags: row.tags || [],
+    date: row.end_date || '',
+    startDate: row.start_date || '',
+    value: Number(row.value) || 0,
+    hours: Number(row.hours_sold) || 0,
+    serviceType: row.service_type || '',
+    timezone: row.timezone || 'SGT (UTC+8)',
+    leadSource: row.lead_source || '',
+    description: row.description || '',
+    notes: row.notes || '',
+    archived: row.archived || false,
+  };
+}
 
 const emptyNewProject = {
   name: '', assignContacts: [], stage: 'New', serviceType: '', startDate: '', endDate: '',
@@ -101,10 +106,11 @@ function StageDropdown({ stage, onSelect, onClose }) {
   );
 }
 
-function NewProjectPanel({ onClose, onSave }) {
+function NewProjectPanel({ onClose, onSave, existingContacts }) {
   const [form, setForm] = useState(emptyNewProject);
   const [contactSearch, setContactSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const filteredContacts = contactSearch
     ? existingContacts.filter(c => c.toLowerCase().includes(contactSearch.toLowerCase()) && !form.assignContacts.includes(c))
@@ -120,9 +126,11 @@ function NewProjectPanel({ onClose, onSave }) {
     setForm(f => ({ ...f, assignContacts: f.assignContacts.filter(c => c !== name) }));
   };
 
-  const save = () => {
+  const save = async () => {
     if (!form.name) return;
-    onSave(form);
+    setSaving(true);
+    await onSave(form);
+    setSaving(false);
     onClose();
   };
 
@@ -141,7 +149,7 @@ function NewProjectPanel({ onClose, onSave }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Assign Contacts</label>
+            <label className="form-label">Client</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
               {form.assignContacts.map(c => (
                 <span key={c} style={{
@@ -167,16 +175,16 @@ function NewProjectPanel({ onClose, onSave }) {
               {showSuggestions && contactSearch && (
                 <div style={{
                   position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-                  background: '#fff', border: '1px solid #e5e0d8', borderRadius: 8,
+                  background: '#fff', border: '1px solid var(--border)', borderRadius: 8,
                   boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden',
                 }}>
                   {filteredContacts.map(c => (
                     <button key={c} onClick={() => addContact(c)} style={{
                       display: 'block', width: '100%', padding: '9px 12px',
                       background: 'none', border: 'none', cursor: 'pointer',
-                      textAlign: 'left', fontSize: 13, color: '#1a1a1a',
+                      textAlign: 'left', fontSize: 13,
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#faf8f4'}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--slate-50)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'none'}
                     >
                       {c}
@@ -185,12 +193,12 @@ function NewProjectPanel({ onClose, onSave }) {
                   <button onClick={() => addContact(contactSearch)} style={{
                     display: 'block', width: '100%', padding: '9px 12px',
                     background: 'none', border: 'none', cursor: 'pointer',
-                    textAlign: 'left', fontSize: 13, color: '#f59e0b', fontWeight: 500,
+                    textAlign: 'left', fontSize: 13, color: 'var(--amber)', fontWeight: 500,
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#fffbeb'}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--amber-subtle)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'none'}
                   >
-                    ➕ Create new contact: {contactSearch}
+                    ➕ Add "{contactSearch}"
                   </button>
                 </div>
               )}
@@ -244,59 +252,99 @@ function NewProjectPanel({ onClose, onSave }) {
           </div>
         </div>
         <div className="slide-panel-footer" style={{ justifyContent: 'stretch' }}>
-          <button className="btn btn-primary" onClick={save} style={{ width: '100%', justifyContent: 'center', fontSize: 15 }}>
-            Create Project
+          <button className="btn btn-primary" onClick={save} disabled={saving} style={{ width: '100%', justifyContent: 'center', fontSize: 15 }}>
+            {saving ? <><Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> Creating…</> : 'Create Project'}
           </button>
         </div>
       </div>
+      <style>{`@keyframes spin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }`}</style>
     </>
   );
 }
 
 export default function Projects() {
-  const [projects, setProjects] = useState(initialProjects);
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [openMenu, setOpenMenu] = useState(null);
   const [openStage, setOpenStage] = useState(null);
   const [openTag, setOpenTag] = useState(null);
   const [showNew, setShowNew] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [contactNames, setContactNames] = useState([]);
 
-  const updateStage = (id, stage) => {
+  useEffect(() => {
+    fetchProjects();
+    fetchContactNames();
+  }, []);
+
+  async function fetchProjects() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('archived', false)
+      .order('created_at', { ascending: false });
+
+    if (!error && data) setProjects(data.map(rowToProject));
+    setLoading(false);
+  }
+
+  async function fetchContactNames() {
+    const { data } = await supabase.from('contacts').select('name').eq('archived', false).order('name');
+    if (data) setContactNames(data.map(c => c.name));
+  }
+
+  async function updateStage(id, stage) {
     setProjects(p => p.map(pr => pr.id === id ? { ...pr, stage, tags: [] } : pr));
+    await supabase.from('projects').update({ stage, tags: [] }).eq('id', id);
     setOpenStage(null);
-  };
+  }
 
-  const deleteProject = (id) => {
+  async function deleteProject(id) {
     setProjects(p => p.filter(pr => pr.id !== id));
+    await supabase.from('projects').delete().eq('id', id);
     setOpenMenu(null);
-  };
+  }
 
-  const archiveProject = (id) => {
-    setProjects(p => p.map(pr => pr.id === id ? { ...pr, stage: 'Completed' } : pr));
+  async function archiveProject(id) {
+    setProjects(p => p.filter(pr => pr.id !== id));
+    await supabase.from('projects').update({ archived: true }).eq('id', id);
     setOpenMenu(null);
-  };
+  }
 
-  const toggleTag = (id, tag) => {
-    setProjects(p => p.map(pr => {
-      if (pr.id !== id) return pr;
-      const tags = pr.tags.includes(tag) ? pr.tags.filter(t => t !== tag) : [...pr.tags, tag];
-      return { ...pr, tags };
-    }));
+  async function toggleTag(id, tag) {
+    const project = projects.find(p => p.id === id);
+    if (!project) return;
+    const tags = project.tags.includes(tag)
+      ? project.tags.filter(t => t !== tag)
+      : [...project.tags, tag];
+    setProjects(p => p.map(pr => pr.id === id ? { ...pr, tags } : pr));
+    await supabase.from('projects').update({ tags }).eq('id', id);
     setOpenTag(null);
-  };
+  }
 
-  const saveNew = (form) => {
-    setProjects(p => [...p, {
-      ...form,
-      id: Date.now(),
-      client: form.assignContacts.join(', ') || '',
-      date: form.endDate || '',
-      value: 0,
-      hours: 0,
-      description: form.notes || '',
+  async function saveNew(form) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const insert = {
+      user_id: user.id,
+      name: form.name,
+      client: form.assignContacts.join(', ') || null,
+      service_type: form.serviceType || null,
+      stage: form.stage,
+      start_date: form.startDate || null,
+      end_date: form.endDate || null,
+      timezone: form.timezone,
+      lead_source: form.leadSource || null,
+      notes: form.notes || null,
       tags: [],
-    }]);
-  };
+      value: 0,
+      hours_sold: 0,
+    };
+    const { data, error } = await supabase.from('projects').insert(insert).select().single();
+    if (!error && data) {
+      setProjects(p => [rowToProject(data), ...p]);
+    }
+  }
 
   if (selectedProject) {
     return (
@@ -320,7 +368,11 @@ export default function Projects() {
         </button>
       </div>
 
-      {projects.length === 0 ? (
+      {loading ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 80, gap: 12, color: 'var(--slate-400)' }}>
+          <Loader size={20} style={{ animation: 'spin 1s linear infinite' }} /> Loading projects…
+        </div>
+      ) : projects.length === 0 ? (
         <div className="table-container">
           <div className="empty-state">
             <div className="empty-state-icon"><FolderKanban size={48} /></div>
@@ -387,7 +439,7 @@ export default function Projects() {
                     {/* Project Name */}
                     <td>
                       <button
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontWeight: 500, color: '#1a1a1a', fontSize: 14, padding: 0 }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontWeight: 500, color: 'var(--slate-900)', fontSize: 14, padding: 0 }}
                         onClick={() => setSelectedProject(p)}
                       >
                         {p.name}
@@ -448,10 +500,14 @@ export default function Projects() {
                       )}
                     </td>
 
-                    <td style={{ color: '#6b7280' }}>{p.client}</td>
-                    <td style={{ color: '#6b7280', fontSize: 13 }}>{p.date}</td>
-                    <td style={{ fontWeight: 500 }}>S${Number(p.value).toLocaleString()}</td>
-                    <td style={{ color: '#6b7280', fontSize: 13 }}>{p.hours > 0 ? `${p.hours}h` : '—'}</td>
+                    <td style={{ color: 'var(--slate-500)' }}>{p.client}</td>
+                    <td style={{ color: 'var(--slate-500)', fontSize: 13 }}>
+                      {p.date ? new Date(p.date).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                    </td>
+                    <td style={{ fontWeight: 500 }}>
+                      {p.value > 0 ? `S$${Number(p.value).toLocaleString()}` : '—'}
+                    </td>
+                    <td style={{ color: 'var(--slate-500)', fontSize: 13 }}>{p.hours > 0 ? `${p.hours}h` : '—'}</td>
                   </tr>
                 );
               })}
@@ -464,8 +520,10 @@ export default function Projects() {
         <NewProjectPanel
           onClose={() => setShowNew(false)}
           onSave={saveNew}
+          existingContacts={contactNames}
         />
       )}
+      <style>{`@keyframes spin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }`}</style>
     </div>
   );
 }

@@ -1,29 +1,44 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   LineChart, Line, ComposedChart, Legend,
 } from 'recharts';
-import { Plus, X, CheckCircle, DollarSign, Search, Zap, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, X, CheckCircle, DollarSign, Search, Zap, ChevronDown, ChevronUp, Loader } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
-const initialInvoices = [
-  { id: 1, invoice: 'INV-2026-001', client: 'Lumen Co', project: 'Brand Refresh', amount: 8500, due: '10 Apr 2026', status: 'Upcoming', currency: 'SGD', month: 'Apr', type: 'Branding' },
-  { id: 2, invoice: 'INV-2026-002', client: 'Vertex Inc', project: 'Annual Report', amount: 6000, due: '18 Apr 2026', status: 'Processing', currency: 'SGD', month: 'Apr', type: 'Corporate' },
-  { id: 3, invoice: 'INV-2026-003', client: 'Bloom Foods', project: 'Packaging Design', amount: 4200, due: '5 Apr 2026', status: 'Overdue', currency: 'SGD', month: 'Apr', type: 'Packaging' },
-  { id: 4, invoice: 'INV-2026-004', client: 'Kova Studio', project: 'Social Media Kit', amount: 3600, due: '22 Mar 2026', status: 'Paid', currency: 'SGD', month: 'Mar', type: 'Social' },
-  { id: 5, invoice: 'INV-2026-005', client: 'Arko Media', project: 'Motion Graphics', amount: 7800, due: '12 Mar 2026', status: 'Paid', currency: 'SGD', month: 'Mar', type: 'Motion' },
-  { id: 6, invoice: 'INV-2026-006', client: 'Novu Tech', project: 'Website Redesign', amount: 5000, due: '30 Apr 2026', status: 'Upcoming', currency: 'SGD', month: 'Apr', type: 'Digital' },
-  { id: 7, invoice: 'INV-2026-007', client: 'Prism Labs', project: 'CGI Renders', amount: 9200, due: '15 May 2026', status: 'Upcoming', currency: 'SGD', month: 'May', type: 'CGI' },
-  { id: 8, invoice: 'INV-2026-008', client: 'Hiro Co', project: 'Print Catalogue', amount: 5500, due: '20 Feb 2026', status: 'Paid', currency: 'SGD', month: 'Feb', type: 'Print' },
-];
+// Map Supabase row → component invoice shape
+function rowToInvoice(row) {
+  return {
+    id: row.id,
+    invoice: row.invoice_number,
+    client: row.client,
+    project: row.project || '',
+    amount: Number(row.amount),
+    due: row.due_date ? new Date(row.due_date).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
+    dueRaw: row.due_date || '',
+    status: row.status,
+    currency: row.currency || 'SGD',
+    month: row.month || '',
+    type: row.service_type || '',
+    chase_active: row.chase_active || false,
+  };
+}
 
-const initialExpenses = [
-  { id: 1, merchant: 'Adobe Creative Cloud', date: '1 Apr 2026', amount: 89.99, currency: 'SGD', client: 'Internal', category: 'Licenses', recurring: true, recurrence: 'Monthly' },
-  { id: 2, merchant: 'Grab Business', date: '5 Apr 2026', amount: 24.50, currency: 'SGD', client: 'Lumen Co', category: 'Meals & Transport', recurring: false, recurrence: '' },
-  { id: 3, merchant: 'Google Ads', date: '3 Apr 2026', amount: 320, currency: 'SGD', client: 'Internal', category: 'Advertising & Marketing', recurring: true, recurrence: 'Monthly' },
-  { id: 4, merchant: 'AWS', date: '1 Apr 2026', amount: 45.00, currency: 'USD', client: 'Internal', category: 'Utilities', recurring: true, recurrence: 'Monthly' },
-  { id: 5, merchant: 'Notion', date: '15 Mar 2026', amount: 16, currency: 'USD', client: 'Internal', category: 'Licenses', recurring: true, recurrence: 'Monthly' },
-  { id: 6, merchant: 'Client Lunch – Vertex', date: '8 Apr 2026', amount: 188, currency: 'SGD', client: 'Vertex Inc', category: 'Client Gifts', recurring: false, recurrence: '' },
-];
+// Map Supabase row → component expense shape
+function rowToExpense(row) {
+  return {
+    id: row.id,
+    merchant: row.merchant,
+    date: row.date ? new Date(row.date).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
+    dateRaw: row.date || '',
+    amount: Number(row.amount),
+    currency: row.currency || 'SGD',
+    client: row.client || 'Internal',
+    category: row.category || '',
+    recurring: row.recurring || false,
+    recurrence: row.recurrence || '',
+  };
+}
 
 const monthlyPL = [
   { month: 'Oct', income: 18200, expenses: 4200 },
@@ -85,13 +100,16 @@ function nextDueDate(recurrence) {
 
 export default function Income({ onNavigate }) {
   const [activeTab, setActiveTab] = useState('Overview');
-  const [invoices, setInvoices] = useState(initialInvoices);
-  const [expenses, setExpenses] = useState(initialExpenses);
+  const [invoices, setInvoices] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [loadingInv, setLoadingInv] = useState(true);
+  const [loadingExp, setLoadingExp] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [showExpense, setShowExpense] = useState(false);
   const [openMenu, setOpenMenu] = useState(null);
   const [toast, setToast] = useState('');
-  const [form, setForm] = useState({ client: '', project: '', amount: '', currency: 'SGD', due: '', status: 'Upcoming', month: 'Apr', type: 'Branding' });
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ client: '', project: '', amount: '', currency: 'SGD', due: '', status: 'Upcoming', month: '', type: '' });
   const [expForm, setExpForm] = useState({
     merchant: '', date: '', amount: '', currency: 'SGD', client: 'Internal', category: 'Licenses',
     recurring: false, recurrence: 'Monthly',
@@ -115,6 +133,22 @@ export default function Income({ onNavigate }) {
   const [plPeriod, setPlPeriod] = useState('This Month');
   const [taxRate, setTaxRate] = useState(22);
 
+  useEffect(() => { fetchInvoices(); fetchExpenses(); }, []);
+
+  async function fetchInvoices() {
+    setLoadingInv(true);
+    const { data, error } = await supabase.from('invoices').select('*').order('created_at', { ascending: false });
+    if (!error && data) setInvoices(data.map(rowToInvoice));
+    setLoadingInv(false);
+  }
+
+  async function fetchExpenses() {
+    setLoadingExp(true);
+    const { data, error } = await supabase.from('expenses').select('*').order('date', { ascending: false });
+    if (!error && data) setExpenses(data.map(rowToExpense));
+    setLoadingExp(false);
+  }
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
   const openChase = (inv) => {
@@ -136,30 +170,73 @@ export default function Income({ onNavigate }) {
     setReminders(prev => prev.map(r => r.id === id ? { ...r, subject: val } : r));
   };
 
-  const markStatus = (id, status) => {
+  const markStatus = async (id, status) => {
     setInvoices(inv => inv.map(i => i.id === id ? { ...i, status } : i));
+    const update = { status, ...(status === 'Paid' ? { paid_at: new Date().toISOString() } : {}) };
+    await supabase.from('invoices').update(update).eq('id', id);
     setOpenMenu(null);
     if (status === 'Paid') showToast('Payment received!');
   };
 
-  const saveNew = () => {
+  const saveNew = async () => {
     if (!form.client || !form.amount) return;
-    const next = `INV-2026-${String(invoices.length + 1).padStart(3, '0')}`;
-    setInvoices(inv => [...inv, { id: Date.now(), invoice: next, ...form, amount: Number(form.amount) }]);
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const year = new Date().getFullYear();
+    const num = String(invoices.length + 1).padStart(3, '0');
+    const invoiceNum = `INV-${year}-${num}`;
+    const monthName = form.due ? new Date(form.due).toLocaleString('en', { month: 'short' }) : '';
+    const insert = {
+      user_id: user.id,
+      invoice_number: invoiceNum,
+      client: form.client,
+      project: form.project || null,
+      amount: Number(form.amount),
+      currency: form.currency,
+      due_date: form.due || null,
+      status: form.status,
+      month: monthName,
+      service_type: form.type || null,
+    };
+    const { data, error } = await supabase.from('invoices').insert(insert).select().single();
+    if (!error && data) {
+      setInvoices(inv => [rowToInvoice(data), ...inv]);
+      showToast('Invoice created!');
+    }
+    setSaving(false);
     setShowNew(false);
-    setForm({ client: '', project: '', amount: '', currency: 'SGD', due: '', status: 'Upcoming', month: 'Apr', type: 'Branding' });
-    showToast('Invoice created!');
+    setForm({ client: '', project: '', amount: '', currency: 'SGD', due: '', status: 'Upcoming', month: '', type: '' });
   };
 
-  const saveExpense = () => {
+  const saveExpense = async () => {
     if (!expForm.merchant || !expForm.amount) return;
-    setExpenses(e => [...e, { id: Date.now(), ...expForm, amount: Number(expForm.amount) }]);
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const insert = {
+      user_id: user.id,
+      merchant: expForm.merchant,
+      date: expForm.date || new Date().toISOString().split('T')[0],
+      amount: Number(expForm.amount),
+      currency: expForm.currency,
+      client: expForm.client,
+      category: expForm.category,
+      recurring: expForm.recurring,
+      recurrence: expForm.recurring ? expForm.recurrence : null,
+    };
+    const { data, error } = await supabase.from('expenses').insert(insert).select().single();
+    if (!error && data) {
+      setExpenses(e => [rowToExpense(data), ...e]);
+      showToast('Expense added!');
+    }
+    setSaving(false);
     setShowExpense(false);
     setExpForm({ merchant: '', date: '', amount: '', currency: 'SGD', client: 'Internal', category: 'Licenses', recurring: false, recurrence: 'Monthly' });
-    showToast('Expense added!');
   };
 
-  const deleteExpense = (id) => setExpenses(e => e.filter(ex => ex.id !== id));
+  const deleteExpense = async (id) => {
+    setExpenses(e => e.filter(ex => ex.id !== id));
+    await supabase.from('expenses').delete().eq('id', id);
+  };
 
   const totals = {
     paid: invoices.filter(i => i.status === 'Paid').reduce((s, i) => s + i.amount, 0),
