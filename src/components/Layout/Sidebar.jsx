@@ -2,42 +2,58 @@ import { useState } from 'react';
 import {
   LayoutDashboard, FolderKanban, Calendar, DollarSign, Users,
   Briefcase, FileText, BarChart3, BookUser, Settings, ChevronLeft,
-  ChevronRight, Zap, ClipboardList, Image, FolderOpen, Tag
+  ChevronRight, Zap, ClipboardList, Image, FolderOpen, Tag, LogOut
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 const navItems = [
-  { id: 'setup', label: 'Setup', icon: Settings },
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'autopilot', label: 'Autopilot', icon: Zap },
-  { id: 'projects', label: 'Projects', icon: FolderKanban },
-  { id: 'calendar', label: 'Calendar', icon: Calendar },
-  { id: 'income', label: 'Income', icon: DollarSign },
-  { id: 'clients', label: 'Clients', icon: Users },
-  { id: 'services', label: 'Services', icon: Briefcase },
-  { id: 'forms', label: 'Forms & Templates', icon: FileText },
-  { id: 'lead-forms', label: 'Lead Forms', icon: ClipboardList },
-  { id: 'portfolio', label: 'Portfolio', icon: Image },
-  { id: 'files', label: 'Files & Templates', icon: FolderOpen },
-  { id: 'contacts', label: 'Contacts', icon: BookUser },
-  { id: 'finance', label: 'Finance', icon: BarChart3 },
-  { id: 'reports', label: 'Reports', icon: BarChart3 },
-  { id: 'pricing', label: 'Pricing', icon: Tag },
+  { id: 'setup',      label: 'Setup',            icon: Settings },
+  { id: 'dashboard',  label: 'Dashboard',         icon: LayoutDashboard },
+  { id: 'autopilot',  label: 'Autopilot',         icon: Zap },
+  { id: 'projects',   label: 'Projects',          icon: FolderKanban },
+  { id: 'calendar',   label: 'Calendar',          icon: Calendar },
+  { id: 'income',     label: 'Income',            icon: DollarSign },
+  { id: 'clients',    label: 'Clients',           icon: Users },
+  { id: 'services',   label: 'Services',          icon: Briefcase },
+  { id: 'forms',      label: 'Forms & Templates', icon: FileText },
+  { id: 'lead-forms', label: 'Lead Forms',        icon: ClipboardList },
+  { id: 'portfolio',  label: 'Portfolio',         icon: Image },
+  { id: 'files',      label: 'Files & Templates', icon: FolderOpen },
+  { id: 'contacts',   label: 'Contacts',          icon: BookUser },
+  { id: 'finance',    label: 'Finance',           icon: BarChart3 },
+  { id: 'reports',    label: 'Reports',           icon: BarChart3 },
+  { id: 'pricing',    label: 'Pricing',           icon: Tag },
 ];
 
-export default function Sidebar({ active, onNavigate, collapsed, onToggle }) {
+export default function Sidebar({ active, onNavigate, collapsed, onToggle, session }) {
+  const displayName = session?.user?.user_metadata?.full_name
+    || session?.user?.email?.split('@')[0]
+    || 'Freelancer';
+
+  const initials = displayName
+    .split(' ')
+    .map(w => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+  }
+
   return (
     <aside
       className="sidebar"
       style={{
         width: collapsed ? 64 : 240,
-        background: '#1a1a1a',
+        background: 'var(--sidebar-bg)',
         minHeight: '100vh',
         display: 'flex',
         flexDirection: 'column',
         position: 'sticky',
         top: 0,
         height: '100vh',
-        transition: 'width 0.3s ease',
+        transition: 'width 0.25s ease',
         flexShrink: 0,
         overflow: 'hidden',
         zIndex: 10,
@@ -49,15 +65,16 @@ export default function Sidebar({ active, onNavigate, collapsed, onToggle }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: collapsed ? 'center' : 'space-between',
-        borderBottom: '1px solid #2d2d2d',
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
         minHeight: 64,
+        flexShrink: 0,
       }}>
         {!collapsed && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               width: 32, height: 32, borderRadius: 8,
-              background: '#f59e0b', display: 'flex',
-              alignItems: 'center', justifyContent: 'center'
+              background: 'var(--amber)', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
             }}>
               <Zap size={18} color="#fff" fill="#fff" />
             </div>
@@ -69,8 +86,8 @@ export default function Sidebar({ active, onNavigate, collapsed, onToggle }) {
         {collapsed && (
           <div style={{
             width: 32, height: 32, borderRadius: 8,
-            background: '#f59e0b', display: 'flex',
-            alignItems: 'center', justifyContent: 'center'
+            background: 'var(--amber)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
           }}>
             <Zap size={18} color="#fff" fill="#fff" />
           </div>
@@ -80,9 +97,12 @@ export default function Sidebar({ active, onNavigate, collapsed, onToggle }) {
             onClick={onToggle}
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
-              color: '#6b7280', padding: 4, borderRadius: 6, display: 'flex',
-              alignItems: 'center', justifyContent: 'center',
+              color: 'rgba(255,255,255,0.3)', padding: 4, borderRadius: 6,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'color 150ms',
             }}
+            onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}
           >
             <ChevronLeft size={16} />
           </button>
@@ -103,61 +123,108 @@ export default function Sidebar({ active, onNavigate, collapsed, onToggle }) {
                 display: 'flex',
                 alignItems: 'center',
                 gap: collapsed ? 0 : 10,
-                padding: collapsed ? '10px 0' : '10px 12px',
+                padding: collapsed ? '10px 0' : '9px 12px',
                 justifyContent: collapsed ? 'center' : 'flex-start',
                 borderRadius: 8,
                 border: 'none',
                 cursor: 'pointer',
-                background: isActive ? '#f59e0b' : 'transparent',
-                color: isActive ? '#fff' : '#9ca3af',
+                background: isActive ? 'var(--amber)' : 'transparent',
+                color: isActive ? '#fff' : 'rgba(255,255,255,0.45)',
                 fontSize: 13,
                 fontWeight: isActive ? 600 : 400,
                 marginBottom: 2,
-                transition: 'all 0.15s ease',
+                transition: 'background 150ms, color 150ms',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
               }}
               onMouseEnter={e => {
                 if (!isActive) {
-                  e.currentTarget.style.background = '#2d2d2d';
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.07)';
                   e.currentTarget.style.color = '#fff';
                 }
               }}
               onMouseLeave={e => {
                 if (!isActive) {
                   e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = '#9ca3af';
+                  e.currentTarget.style.color = 'rgba(255,255,255,0.45)';
                 }
               }}
             >
-              <Icon size={18} style={{ flexShrink: 0 }} />
+              <Icon size={17} style={{ flexShrink: 0 }} />
               {!collapsed && <span>{label}</span>}
             </button>
           );
         })}
       </nav>
 
-      {/* Collapse toggle at bottom */}
-      {collapsed && (
-        <div style={{ padding: '12px 0', display: 'flex', justifyContent: 'center', borderTop: '1px solid #2d2d2d' }}>
-          <button
-            onClick={onToggle}
-            style={{
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              color: '#6b7280', padding: 6, borderRadius: 6, display: 'flex',
-            }}
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      )}
+      {/* Bottom: collapse toggle + user */}
+      <div style={{ flexShrink: 0 }}>
+        {collapsed && (
+          <div style={{ padding: '8px 0', display: 'flex', justifyContent: 'center', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+            <button
+              onClick={onToggle}
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: 'rgba(255,255,255,0.3)', padding: 6, borderRadius: 6, display: 'flex',
+              }}
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
 
-      {/* Footer */}
-      {!collapsed && (
-        <div style={{ padding: '16px 20px', borderTop: '1px solid #2d2d2d' }}>
-          <div style={{ fontSize: 12, color: '#4b5563' }}>Flint v1.0</div>
+        {/* User strip */}
+        <div style={{
+          padding: collapsed ? '12px 0' : '12px 12px',
+          borderTop: '1px solid rgba(255,255,255,0.07)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: collapsed ? 'center' : 'space-between',
+          gap: 10,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+            {/* Avatar */}
+            <div style={{
+              width: 30, height: 30, borderRadius: 7,
+              background: 'var(--amber)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, fontWeight: 700, color: 'var(--slate-900)',
+              flexShrink: 0,
+            }}>
+              {initials}
+            </div>
+            {!collapsed && (
+              <div style={{ minWidth: 0 }}>
+                <div style={{
+                  fontSize: 12, fontWeight: 600, color: '#fff',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  maxWidth: 120,
+                }}>
+                  {displayName}
+                </div>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
+                  Free plan
+                </div>
+              </div>
+            )}
+          </div>
+          {!collapsed && (
+            <button
+              onClick={handleLogout}
+              title="Sign out"
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: 'rgba(255,255,255,0.3)', padding: 4, borderRadius: 6,
+                display: 'flex', flexShrink: 0, transition: 'color 150ms',
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}
+            >
+              <LogOut size={15} />
+            </button>
+          )}
         </div>
-      )}
+      </div>
     </aside>
   );
 }
