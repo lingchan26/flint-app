@@ -62,12 +62,22 @@ function rowToProject(row) {
     description: row.description || '',
     notes: row.notes || '',
     archived: row.archived || false,
+    riskLevel: row.risk_level || 10,
   };
 }
 
+const RISK_LEVELS = [
+  { value: 10,  label: '10% — Initial interest', desc: 'Client connected, early conversation' },
+  { value: 30,  label: '30% — Shared interest',  desc: 'Asked for portfolio/creds, no brief yet' },
+  { value: 50,  label: '50% — Exploring',         desc: 'Brief shared, casual cost & timeline discussion' },
+  { value: 70,  label: '70% — Shortlisted',       desc: 'Client shortlisting freelancers, formal proposal needed' },
+  { value: 90,  label: '90% — Finalising',         desc: 'Freelancer selected, cost agreed verbally/by email' },
+  { value: 100, label: '100% — Confirmed',         desc: 'PO sent / contract signed' },
+];
+
 const emptyNewProject = {
   name: '', assignContacts: [], stage: 'New', serviceType: '', startDate: '', endDate: '',
-  timezone: 'SGT (UTC+8)', leadSource: '', notes: '', tags: [],
+  timezone: 'SGT (UTC+8)', leadSource: '', notes: '', tags: [], riskLevel: 10,
 };
 
 function TagPill({ tag, onClick }) {
@@ -246,6 +256,37 @@ function NewProjectPanel({ onClose, onSave, existingContacts }) {
             </select>
           </div>
 
+          {/* Risk Level */}
+          <div className="form-group">
+            <label className="form-label">Win Probability</label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+              {RISK_LEVELS.map(r => (
+                <button
+                  key={r.value}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, riskLevel: r.value }))}
+                  style={{
+                    padding: '5px 12px', borderRadius: 20, border: '1.5px solid',
+                    borderColor: form.riskLevel === r.value ? (r.value >= 70 ? '#10b981' : r.value >= 50 ? '#f59e0b' : '#6b7280') : 'var(--border)',
+                    background: form.riskLevel === r.value ? (r.value >= 70 ? '#d1fae5' : r.value >= 50 ? '#fef3c7' : '#f3f4f6') : '#fff',
+                    color: form.riskLevel === r.value ? (r.value >= 70 ? '#065f46' : r.value >= 50 ? '#92400e' : '#374151') : 'var(--slate-500)',
+                    fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 150ms',
+                  }}
+                >
+                  {r.value}%
+                </button>
+              ))}
+            </div>
+            {form.riskLevel && (
+              <div style={{
+                background: 'var(--slate-50)', border: '1px solid var(--border)',
+                borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--slate-600)',
+              }}>
+                {RISK_LEVELS.find(r => r.value === form.riskLevel)?.desc}
+              </div>
+            )}
+          </div>
+
           <div className="form-group">
             <label className="form-label">Notes</label>
             <textarea className="form-textarea" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any notes about this project…" style={{ minHeight: 100 }} />
@@ -339,6 +380,7 @@ export default function Projects() {
       tags: [],
       value: 0,
       hours_sold: 0,
+      risk_level: form.riskLevel || 10,
     };
     const { data, error } = await supabase.from('projects').insert(insert).select().single();
     if (!error && data) {

@@ -24,17 +24,17 @@ function rowToContact(row) {
   };
 }
 
-const STATUS_OPTS = ['Follow Up', 'Connected', 'Qualified', 'Not Relevant'];
+const STATUS_OPTS = ['Follow Up', 'Connected', 'No Action for Now'];
 
 const statusStyle = {
-  'Follow Up':    { background: '#fef3c7', color: '#92400e' },
-  'Connected':    { background: '#d1fae5', color: '#065f46' },
-  'Qualified':    { background: '#dbeafe', color: '#1e40af' },
-  'Not Relevant': { background: '#f3f4f6', color: '#4b5563' },
+  'Follow Up':       { background: '#fef3c7', color: '#92400e' },
+  'Connected':       { background: '#d1fae5', color: '#065f46' },
+  'No Action for Now': { background: '#f3f4f6', color: '#4b5563' },
 };
 
 const relationshipLabel = { 5: 'Strong', 4: 'Good', 3: 'Warm', 2: 'Developing', 1: 'Cold' };
-const relationshipColor = { 5: '#10b981', 4: '#3b82f6', 3: '#f59e0b', 2: '#9ca3af', 1: '#ef4444' };
+// Cold (light blue) → Warm (bright orange)
+const relationshipColor = { 1: '#93c5fd', 2: '#60a5fa', 3: '#fbbf24', 4: '#f97316', 5: '#ea580c' };
 
 const radarData = {
   1: {
@@ -455,7 +455,7 @@ function RelationshipDots({ value, onChange }) {
             onClick={() => onChange && onChange(i)}
             style={{
               width: 12, height: 12, borderRadius: '50%', border: 'none',
-              background: i <= value ? '#f59e0b' : '#e5e0d8',
+              background: i <= value ? relationshipColor[i] : '#e5e0d8',
               cursor: onChange ? 'pointer' : 'default',
               padding: 0,
               transition: 'background 0.15s',
@@ -910,13 +910,15 @@ export default function Contacts() {
   const [radarContact, setRadarContact] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [projectNames, setProjectNames] = useState([]);
   const [form, setForm] = useState({
     name: '', email: '', phone: '', lastInteraction: '',
     website: '', company: '', jobTitle: '', status: 'Follow Up',
-    addToProject: false, notes: '', tags: [],
+    followUpDate: '', addToProject: '', notes: '', tags: [],
+    lastProject: '', lastProjectDate: '',
   });
 
-  useEffect(() => { fetchContacts(); }, []);
+  useEffect(() => { fetchContacts(); fetchProjectNames(); }, []);
 
   async function fetchContacts() {
     setLoading(true);
@@ -928,15 +930,20 @@ export default function Contacts() {
     setLoading(false);
   }
 
+  async function fetchProjectNames() {
+    const { data } = await supabase.from('projects').select('name').eq('archived', false).order('name');
+    if (data) setProjectNames(data.map(p => p.name));
+  }
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
   const openForm = (contact = null) => {
     if (contact) {
       setEditContact(contact);
-      setForm({ ...contact });
+      setForm({ ...contact, followUpDate: contact.followUpDate || '', addToProject: contact.addToProject || '', lastProject: contact.lastProject || '', lastProjectDate: contact.lastProjectDate || '' });
     } else {
       setEditContact(null);
-      setForm({ name: '', email: '', phone: '', lastInteraction: '', website: '', company: '', jobTitle: '', status: 'Follow Up', addToProject: false, notes: '', tags: [] });
+      setForm({ name: '', email: '', phone: '', lastInteraction: '', website: '', company: '', jobTitle: '', status: 'Follow Up', followUpDate: '', addToProject: '', notes: '', tags: [], lastProject: '', lastProjectDate: '' });
     }
     setShowNew(true);
   };
@@ -1196,13 +1203,43 @@ export default function Contacts() {
                   {STATUS_OPTS.map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
+
+              {/* Follow-up date when status = Follow Up */}
+              {form.status === 'Follow Up' && (
+                <div className="form-group" style={{
+                  background: '#fffbeb', border: '1px solid #fde68a',
+                  borderRadius: 8, padding: '12px 14px',
+                }}>
+                  <label className="form-label" style={{ color: '#92400e' }}>📅 Follow up by</label>
+                  <input
+                    className="form-input"
+                    type="date"
+                    value={form.followUpDate}
+                    onChange={e => setForm(f => ({ ...f, followUpDate: e.target.value }))}
+                    style={{ marginTop: 4 }}
+                  />
+                  <div style={{ fontSize: 11, color: '#b45309', marginTop: 6 }}>
+                    You'll receive an in-app reminder on this date.
+                  </div>
+                </div>
+              )}
+
               <div className="form-group">
-                <label className="toggle">
-                  <input type="checkbox" checked={form.addToProject} onChange={e => setForm(f => ({ ...f, addToProject: e.target.checked }))} />
-                  <span className="toggle-slider" />
-                  <span style={{ fontSize: 13, color: '#6b7280' }}>Add to a project</span>
-                </label>
+                <label className="form-label">Last Project</label>
+                <select className="form-select" value={form.lastProject} onChange={e => setForm(f => ({ ...f, lastProject: e.target.value }))}>
+                  <option value="">None</option>
+                  {projectNames.map(p => <option key={p}>{p}</option>)}
+                </select>
               </div>
+
+              <div className="form-group">
+                <label className="form-label">Assign to Project</label>
+                <select className="form-select" value={form.addToProject} onChange={e => setForm(f => ({ ...f, addToProject: e.target.value }))}>
+                  <option value="">None</option>
+                  {projectNames.map(p => <option key={p}>{p}</option>)}
+                </select>
+              </div>
+
               <div className="form-group">
                 <label className="form-label">Notes</label>
                 <textarea className="form-textarea" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any relevant notes…" />

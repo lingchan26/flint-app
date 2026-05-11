@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS projects (
   description TEXT,
   notes TEXT,
   archived BOOLEAN DEFAULT FALSE,
+  risk_level INTEGER DEFAULT 10 CHECK (risk_level IN (10, 30, 50, 70, 90, 100)),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

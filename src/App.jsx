@@ -19,6 +19,7 @@ import Portfolio from './components/Portfolio/Portfolio';
 import FilesTemplates from './components/Files/FilesTemplates';
 import Pricing from './components/Pricing/Pricing';
 import Autopilot from './components/Autopilot/Autopilot';
+import RadarPage from './components/Radar/RadarPage';
 import { Zap } from 'lucide-react';
 import {
   LayoutDashboard, FolderKanban, Calendar, BarChart3, BookUser,
@@ -98,7 +99,7 @@ export default function App() {
       case 'projects':   return <Projects onNavigate={setPage} />;
       case 'calendar':   return <CalendarView />;
       case 'income':     return <Income onNavigate={setPage} />;
-      case 'clients':    return <Clients />;
+      case 'radar':      return <RadarPage />;
       case 'services':   return <Services />;
       case 'forms':      return <FormsTemplates />;
       case 'finance':    return <Finance onNavigate={setPage} />;

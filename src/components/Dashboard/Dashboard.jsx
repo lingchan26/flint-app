@@ -201,6 +201,66 @@ export default function Dashboard({ onNavigate }) {
         </div>
       </div>
 
+      {/* ── Flint Brief (top position) ── */}
+      {show('brief') && (
+        <div style={{
+          background: '#fffbeb', border: '1px solid #fde68a',
+          borderLeft: '4px solid #f59e0b', borderRadius: 12,
+          padding: '14px 18px', marginBottom: 20,
+          display: 'flex', gap: 14, alignItems: 'flex-start',
+        }}>
+          <Mail size={18} color="#f59e0b" style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#78350f', marginBottom: 6 }}>
+              Flint Brief — {formatDate(now)}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ fontSize: 13, color: '#78350f' }}>• <strong>Today:</strong> Discovery call with Bloom Foods at 10am · Proposal for Novu Tech due today</div>
+              <div style={{ fontSize: 13, color: '#78350f' }}>• <strong>This week:</strong> 28 hrs booked of 40hr capacity · S$12,400 in payments expected</div>
+              <div style={{ fontSize: 13, color: '#78350f' }}>• <strong>Action:</strong> Haven't followed up with Kova Studio in 34 days — repeat client</div>
+            </div>
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => onNavigate('setup')}>
+            Configure
+          </button>
+        </div>
+      )}
+
+      {/* ── Create New quick bar ── */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--slate-400)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+          Create new
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[
+            { label: 'Contact', icon: '👤', page: 'contacts', color: '#dbeafe', text: '#1e40af' },
+            { label: 'Project', icon: '📁', page: 'projects', color: '#d1fae5', text: '#065f46' },
+            { label: 'Invoice', icon: '💳', page: 'income', color: '#fef3c7', text: '#92400e' },
+            { label: 'Meeting', icon: '📅', page: 'calendar', color: '#ede9fe', text: '#5b21b6' },
+            { label: 'Task',    icon: '✅', page: 'calendar', color: '#f0fdf4', text: '#166534' },
+            { label: 'Lead Form', icon: '📋', page: 'lead-forms', color: '#f5f3ff', text: '#5b21b6' },
+          ].map(({ label, icon, page, color, text }) => (
+            <button
+              key={label}
+              onClick={() => onNavigate(page)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                padding: '8px 14px', borderRadius: 9,
+                background: color, border: 'none', cursor: 'pointer',
+                fontSize: 13, fontWeight: 600, color: text,
+                transition: 'transform 100ms, box-shadow 100ms',
+                boxShadow: 'var(--shadow-xs)',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'var(--shadow-xs)'; }}
+            >
+              <span style={{ fontSize: 15 }}>{icon}</span>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Stats */}
       {show('stats') && (
         <div className="stats-grid" style={{ marginBottom: 24 }}>
@@ -251,64 +311,48 @@ export default function Dashboard({ onNavigate }) {
         </div>
       )}
 
-      {/* Headspace Widget */}
+      {/* Headspace — compact */}
       {show('headspace') && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div className="card-header">
-            <div>
-              <div className="card-title">Headspace</div>
-              <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>Your capacity at a glance</div>
-            </div>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div className="card-title" style={{ margin: 0 }}>Headspace <span style={{ fontSize: 11, color: 'var(--slate-400)', fontWeight: 400, marginLeft: 6 }}>capacity at a glance</span></div>
+            <Zap size={15} color="var(--amber)" fill="var(--amber)" />
           </div>
-
-          {/* This Week */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a' }}>This Week</span>
-              <span style={{ fontSize: 12, color: '#6b7280' }}>28 of 40 hrs · 70%</span>
-            </div>
-            <div style={{ height: 8, borderRadius: 999, background: '#f0ece4', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: '70%', background: '#f59e0b', borderRadius: 999 }} />
-            </div>
-          </div>
-
-          {/* This Month */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a' }}>This Month</span>
-              <span style={{ fontSize: 12, color: '#6b7280' }}>112 of 160 hrs · 70%</span>
-            </div>
-            <div style={{ height: 8, borderRadius: 999, background: '#f0ece4', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: '70%', background: '#f59e0b', borderRadius: 999 }} />
-            </div>
-          </div>
-
-          {/* Hours by service */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', marginBottom: 12 }}>
             {[
-              { label: 'Brand Identity', hrs: '12h' },
-              { label: 'Packaging', hrs: '8h' },
-              { label: 'Social', hrs: '4h' },
-              { label: 'CGI', hrs: '4h' },
-            ].map(item => (
-              <span key={item.label} style={{
-                background: '#fef3c7', color: '#92400e',
-                padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 500,
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}>
-                {item.label} <span style={{ opacity: 0.7 }}>· {item.hrs}</span>
-              </span>
+              { label: 'This Week', used: 28, total: 40, pct: 70 },
+              { label: 'This Month', used: 112, total: 160, pct: 70 },
+            ].map(h => (
+              <div key={h.label}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-700)' }}>{h.label}</span>
+                  <span style={{ fontSize: 11, color: 'var(--slate-400)' }}>{h.used}h / {h.total}h</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 999, background: 'var(--slate-100)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${h.pct}%`, borderRadius: 999,
+                    background: h.pct >= 90 ? 'var(--danger)' : h.pct >= 70 ? 'var(--amber)' : 'var(--success)' }} />
+                </div>
+              </div>
             ))}
           </div>
-
-          {/* AI commentary */}
-          <div style={{
-            background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
-            padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: 8,
-          }}>
-            <Zap size={14} color="#f59e0b" style={{ flexShrink: 0, marginTop: 1 }} />
-            <span style={{ fontSize: 13, color: '#78350f', lineHeight: 1.5 }}>
-              At 70% capacity, you have room for 1 more small project this week.
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {[
+              { icon: '🎨', label: 'Brand', hrs: '12h', color: '#fef3c7', text: '#92400e' },
+              { icon: '📦', label: 'Packaging', hrs: '8h', color: '#dbeafe', text: '#1e40af' },
+              { icon: '📱', label: 'Social', hrs: '4h', color: '#d1fae5', text: '#065f46' },
+              { icon: '💻', label: 'CGI', hrs: '4h', color: '#ede9fe', text: '#5b21b6' },
+            ].map(item => (
+              <span key={item.label} style={{
+                background: item.color, color: item.text,
+                padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 500,
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}>
+                {item.icon} {item.label} · {item.hrs}
+              </span>
+            ))}
+            <span style={{ fontSize: 12, color: 'var(--slate-400)', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
+              <Zap size={12} color="var(--amber)" fill="var(--amber)" />
+              Room for 1 small project this week
             </span>
           </div>
         </div>
@@ -685,52 +729,7 @@ export default function Dashboard({ onNavigate }) {
         </div>
       )}
 
-      {/* Flint Brief */}
-      {show('brief') && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div className="card-header">
-            <div>
-              <div className="card-title">Flint Brief</div>
-              <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>Your daily PA — delivered to your inbox at 7am</div>
-            </div>
-            <Mail size={18} color="#f59e0b" />
-          </div>
-
-          {/* Preview box */}
-          <div style={{
-            background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
-            padding: 16, marginBottom: 16,
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#78350f', marginBottom: 10 }}>
-              Good morning, Ling ☀️ — Here's your Monday
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ fontSize: 13, color: '#78350f', display: 'flex', gap: 8 }}>
-                <span style={{ flexShrink: 0 }}>•</span>
-                <span><strong>Today:</strong> Discovery call with Bloom Foods at 10am · Proposal for Novu Tech due today</span>
-              </div>
-              <div style={{ fontSize: 13, color: '#78350f', display: 'flex', gap: 8 }}>
-                <span style={{ flexShrink: 0 }}>•</span>
-                <span><strong>This week:</strong> 28 hrs booked of your 40hr capacity · S$12,400 in payments expected</span>
-              </div>
-              <div style={{ fontSize: 13, color: '#78350f', display: 'flex', gap: 8 }}>
-                <span style={{ flexShrink: 0 }}>•</span>
-                <span><strong>Action:</strong> You haven't followed up with Kova Studio in 34 days — they're a repeat client</span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-            <span style={{ fontSize: 12, color: '#9ca3af' }}>Flint Brief is sent daily at 7:00 AM SGT</span>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => onNavigate('setup')}
-            >
-              Configure in Setup →
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Flint Brief moved to top of dashboard */}
 
       {/* Customise Dashboard Modal */}
       {showCustomise && (

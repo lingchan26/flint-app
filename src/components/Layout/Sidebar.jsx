@@ -2,7 +2,8 @@ import { useState } from 'react';
 import {
   LayoutDashboard, FolderKanban, Calendar, DollarSign, Users,
   Briefcase, FileText, BarChart3, BookUser, Settings, ChevronLeft,
-  ChevronRight, Zap, ClipboardList, Image, FolderOpen, Tag, LogOut
+  ChevronRight, Zap, ClipboardList, Image, FolderOpen, Tag, LogOut,
+  Radar, CheckSquare,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -12,15 +13,14 @@ const navItems = [
   { id: 'autopilot',  label: 'Autopilot',         icon: Zap },
   { id: 'projects',   label: 'Projects',          icon: FolderKanban },
   { id: 'calendar',   label: 'Calendar',          icon: Calendar },
-  { id: 'income',     label: 'Income',            icon: DollarSign },
-  { id: 'clients',    label: 'Clients',           icon: Users },
+  { id: 'income',     label: 'Finance',           icon: DollarSign },
+  { id: 'contacts',   label: 'Contacts',          icon: BookUser },
+  { id: 'radar',      label: 'Radar',             icon: Radar },
   { id: 'services',   label: 'Services',          icon: Briefcase },
   { id: 'forms',      label: 'Forms & Templates', icon: FileText },
   { id: 'lead-forms', label: 'Lead Forms',        icon: ClipboardList },
   { id: 'portfolio',  label: 'Portfolio',         icon: Image },
   { id: 'files',      label: 'Files & Templates', icon: FolderOpen },
-  { id: 'contacts',   label: 'Contacts',          icon: BookUser },
-  { id: 'finance',    label: 'Finance',           icon: BarChart3 },
   { id: 'reports',    label: 'Reports',           icon: BarChart3 },
   { id: 'pricing',    label: 'Pricing',           icon: Tag },
 ];
@@ -113,6 +113,8 @@ export default function Sidebar({ active, onNavigate, collapsed, onToggle, sessi
       <nav style={{ flex: 1, padding: '12px 8px', overflowY: 'auto', overflowX: 'hidden' }}>
         {navItems.map(({ id, label, icon: Icon }) => {
           const isActive = active === id;
+          // Highlight Radar with a special indicator
+          const isRadar = id === 'radar';
           return (
             <button
               key={id}
@@ -129,13 +131,14 @@ export default function Sidebar({ active, onNavigate, collapsed, onToggle, sessi
                 border: 'none',
                 cursor: 'pointer',
                 background: isActive ? 'var(--amber)' : 'transparent',
-                color: isActive ? '#fff' : 'rgba(255,255,255,0.45)',
+                color: isActive ? '#fff' : isRadar ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.45)',
                 fontSize: 13,
-                fontWeight: isActive ? 600 : 400,
+                fontWeight: isActive ? 600 : isRadar ? 500 : 400,
                 marginBottom: 2,
                 transition: 'background 150ms, color 150ms',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
+                position: 'relative',
               }}
               onMouseEnter={e => {
                 if (!isActive) {
@@ -146,12 +149,24 @@ export default function Sidebar({ active, onNavigate, collapsed, onToggle, sessi
               onMouseLeave={e => {
                 if (!isActive) {
                   e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = 'rgba(255,255,255,0.45)';
+                  e.currentTarget.style.color = isRadar ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.45)';
                 }
               }}
             >
               <Icon size={17} style={{ flexShrink: 0 }} />
-              {!collapsed && <span>{label}</span>}
+              {!collapsed && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                  {label}
+                  {isRadar && !isActive && (
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, letterSpacing: '0.5px',
+                      background: 'var(--amber)', color: '#1a1a1a',
+                      padding: '1px 5px', borderRadius: 3,
+                      marginLeft: 'auto',
+                    }}>AI</span>
+                  )}
+                </span>
+              )}
             </button>
           );
         })}
@@ -183,7 +198,6 @@ export default function Sidebar({ active, onNavigate, collapsed, onToggle, sessi
           gap: 10,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-            {/* Avatar */}
             <div style={{
               width: 30, height: 30, borderRadius: 7,
               background: 'var(--amber)',
