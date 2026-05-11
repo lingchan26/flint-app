@@ -76,8 +76,9 @@ const RISK_LEVELS = [
 ];
 
 const emptyNewProject = {
-  name: '', assignContacts: [], stage: 'New', serviceType: '', startDate: '', endDate: '',
-  timezone: 'SGT (UTC+8)', leadSource: '', notes: '', tags: [], riskLevel: 10,
+  name: '', assignContacts: [], stage: 'New', serviceType: '', serviceTypeOther: '',
+  startDate: '', endDate: '', timezone: 'SGT (UTC+8)', leadSource: '', leadSourceOther: '',
+  notes: '', tags: [], riskLevel: 10,
 };
 
 function TagPill({ tag, onClick }) {
@@ -217,10 +218,20 @@ function NewProjectPanel({ onClose, onSave, existingContacts }) {
 
           <div className="form-group">
             <label className="form-label">Service Type</label>
-            <select className="form-select" value={form.serviceType} onChange={e => setForm(f => ({ ...f, serviceType: e.target.value }))}>
+            <select className="form-select" value={form.serviceType} onChange={e => setForm(f => ({ ...f, serviceType: e.target.value, serviceTypeOther: '' }))}>
               <option value="">Select service type…</option>
               {SERVICE_TYPES.map(s => <option key={s}>{s}</option>)}
             </select>
+            {form.serviceType === 'Others' && (
+              <input
+                className="form-input"
+                style={{ marginTop: 8 }}
+                value={form.serviceTypeOther}
+                onChange={e => setForm(f => ({ ...f, serviceTypeOther: e.target.value }))}
+                placeholder="Describe the service type…"
+                autoFocus
+              />
+            )}
           </div>
 
           <div className="form-row">
@@ -250,10 +261,19 @@ function NewProjectPanel({ onClose, onSave, existingContacts }) {
 
           <div className="form-group">
             <label className="form-label">Lead Source</label>
-            <select className="form-select" value={form.leadSource} onChange={e => setForm(f => ({ ...f, leadSource: e.target.value }))}>
+            <select className="form-select" value={form.leadSource} onChange={e => setForm(f => ({ ...f, leadSource: e.target.value, leadSourceOther: '' }))}>
               <option value="">Select lead source…</option>
               {LEAD_SOURCES.map(l => <option key={l}>{l}</option>)}
             </select>
+            {form.leadSource === 'Others' && (
+              <input
+                className="form-input"
+                style={{ marginTop: 8 }}
+                value={form.leadSourceOther}
+                onChange={e => setForm(f => ({ ...f, leadSourceOther: e.target.value }))}
+                placeholder="Describe where this lead came from…"
+              />
+            )}
           </div>
 
           {/* Risk Level */}
@@ -370,12 +390,12 @@ export default function Projects() {
       user_id: user.id,
       name: form.name,
       client: form.assignContacts.join(', ') || null,
-      service_type: form.serviceType || null,
+      service_type: (form.serviceType === 'Others' ? form.serviceTypeOther : form.serviceType) || null,
       stage: form.stage,
       start_date: form.startDate || null,
       end_date: form.endDate || null,
       timezone: form.timezone,
-      lead_source: form.leadSource || null,
+      lead_source: (form.leadSource === 'Others' ? form.leadSourceOther : form.leadSource) || null,
       notes: form.notes || null,
       tags: [],
       value: 0,
