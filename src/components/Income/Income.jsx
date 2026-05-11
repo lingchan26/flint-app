@@ -276,7 +276,7 @@ export default function Income({ onNavigate }) {
   return (
     <div className="page-content">
       <div className="page-header">
-        <h1 className="page-title">Income</h1>
+        <h1 className="page-title">Finance</h1>
         <button className="btn btn-primary" onClick={() => setShowNew(true)}>
           <Plus size={16} /> New Invoice
         </button>
@@ -324,10 +324,15 @@ export default function Income({ onNavigate }) {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#92400e' }}>
-                Chase active on 2 invoices — S$16,700 outstanding
+                Chase active on{' '}
+                <button onClick={() => setActiveTab('Invoices')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400e', fontWeight: 700, textDecoration: 'underline', padding: 0, fontSize: 13 }}>2 invoices</button>
+                {' '}—{' '}
+                <button onClick={() => setActiveTab('Invoices')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400e', fontWeight: 700, textDecoration: 'underline', padding: 0, fontSize: 13 }}>S$16,700 outstanding</button>
               </div>
               <div style={{ fontSize: 12, color: '#b45309', marginTop: 1 }}>
-                Next reminder sends in 4 days
+                Next reminder sends in{' '}
+                <button onClick={() => setActiveTab('Invoices')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b45309', fontWeight: 700, textDecoration: 'underline', padding: 0, fontSize: 12 }}>4 days</button>
+                {' '}· Bloom Foods + Arko Media
               </div>
             </div>
             <button
@@ -502,6 +507,19 @@ export default function Income({ onNavigate }) {
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         {inv.status !== 'Paid' && (
                           <>
+                            {/* Mark as Paid — prominent green button */}
+                            <button
+                              onClick={() => markStatus(inv.id, 'Paid')}
+                              style={{
+                                padding: '5px 12px', borderRadius: 6, border: 'none',
+                                background: '#10b981', color: '#fff',
+                                fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 4,
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              <CheckCircle size={12} /> Mark Paid
+                            </button>
                             {/* Chase button */}
                             <button
                               onClick={() => openChase(inv)}
@@ -515,17 +533,20 @@ export default function Income({ onNavigate }) {
                             >
                               <Zap size={11} /> Chase
                             </button>
+                            {/* Other options dropdown */}
                             <button
-                              className="btn btn-secondary btn-sm"
+                              className="btn btn-ghost btn-sm"
                               onClick={e => { e.stopPropagation(); setOpenMenu(openMenu === inv.id ? null : inv.id); }}
+                              style={{ fontSize: 16, padding: '2px 6px', lineHeight: 1 }}
+                              title="More options"
                             >
-                              Mark as…
+                              ···
                             </button>
                             {openMenu === inv.id && (
                               <>
                                 <div style={{ position: 'fixed', inset: 0, zIndex: 48 }} onClick={() => setOpenMenu(null)} />
                                 <div className="dropdown-menu" style={{ position: 'absolute', right: 0, top: 36, zIndex: 49 }}>
-                                  {['Mark as Paid', 'Paid via Stripe', 'Paid via Google Pay', 'Paid via PayNow'].map(opt => (
+                                  {['Paid via Stripe', 'Paid via Google Pay', 'Paid via Bank Transfer'].map(opt => (
                                     <button key={opt} className="dropdown-item" onClick={() => markStatus(inv.id, 'Paid')}>
                                       {opt}
                                     </button>
@@ -1040,20 +1061,38 @@ export default function Income({ onNavigate }) {
                 ))}
               </div>
 
-              {/* Pay Now info box */}
+              {/* Bank details */}
               <div style={{
-                background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
+                background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10,
                 padding: '12px 14px', marginBottom: 8,
               }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#92400e', marginBottom: 4 }}>
-                  Pay Now button
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#166534', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  Bank Transfer Details
+                  <a
+                    href="#setup"
+                    onClick={e => { e.preventDefault(); }}
+                    style={{ fontSize: 11, color: '#15803d', textDecoration: 'underline', fontWeight: 400 }}
+                  >
+                    Update in Setup →
+                  </a>
                 </div>
-                <div style={{ fontSize: 12, color: '#78350f', lineHeight: 1.5 }}>
-                  When Chase is active, each reminder email includes a Pay Now button linked to a secure payment page.
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {[
+                    { label: 'Bank', value: 'DBS Bank Singapore' },
+                    { label: 'Account No.', value: '***-****-3421' },
+                    { label: 'Account Name', value: 'Your Business Name' },
+                    { label: 'Swift Code', value: 'DBSSSGSG' },
+                    { label: 'BSB (AUS)', value: '062-000 · CBA' },
+                  ].map(({ label, value }) => (
+                    <div key={label} style={{ display: 'flex', gap: 8, fontSize: 12 }}>
+                      <span style={{ color: '#6b7280', minWidth: 110, flexShrink: 0 }}>{label}</span>
+                      <span style={{ color: '#166534', fontWeight: 600 }}>{value}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>
-                Payment processing via Stripe. Connect Stripe in Setup to enable.
+              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>
+                Chase emails include these bank details + a secure payment link (via Stripe if connected).
               </div>
             </div>
 
