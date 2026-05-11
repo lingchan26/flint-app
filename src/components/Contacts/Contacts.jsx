@@ -957,6 +957,8 @@ export default function Contacts() {
         company: form.company || null, job_title: form.jobTitle || null,
         website: form.website || null, status: form.status,
         last_interaction: form.lastInteraction || null,
+        last_project: form.lastProject || null,
+        last_project_date: form.lastProjectDate || null,
         notes: form.notes || null, tags: form.tags || [],
       };
       const { data, error } = await supabase.from('contacts').update(update).eq('id', editContact.id).select().single();
@@ -972,6 +974,8 @@ export default function Contacts() {
         company: form.company || null, job_title: form.jobTitle || null,
         website: form.website || null, status: form.status,
         last_interaction: form.lastInteraction || null,
+        last_project: form.lastProject || null,
+        last_project_date: form.lastProjectDate || null,
         notes: form.notes || null, tags: form.tags || [],
         relationship: 3, ltv: 0,
       };
