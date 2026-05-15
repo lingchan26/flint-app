@@ -7,25 +7,27 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
-// v0.1 scope: only Setup, Dashboard, Projects, Calendar, Finance (Income), Contacts.
-// Hidden items below are unwired or show fake data — kept in the codebase, removed from nav.
-// To re-enable any item once it's properly wired, just uncomment its line.
+// All 17 features visible. Wiring rolls out across stages:
+//   Stage 1 (now)    — Setup, Dashboard, Projects, Calendar (UI only), Income, Contacts
+//   Stage 2          — Clients, Services, Portfolio + Calendar full wire
+//   Stage 3+         — Reports, Autopilot, Radar, Pricing
+//   Final            — Forms & Templates, Lead Forms, Files & Templates, Project Detail AI
 const navItems = [
-  { id: 'setup',      label: 'Setup',            icon: Settings },
+  { id: 'setup',      label: 'Setup',             icon: Settings },
   { id: 'dashboard',  label: 'Dashboard',         icon: LayoutDashboard },
-  // { id: 'autopilot',  label: 'Autopilot',         icon: Zap },              // v0.2 — speculative feature
+  { id: 'autopilot',  label: 'Autopilot',         icon: Zap },
   { id: 'projects',   label: 'Projects',          icon: FolderKanban },
   { id: 'calendar',   label: 'Calendar',          icon: Calendar },
   { id: 'income',     label: 'Finance',           icon: DollarSign },
   { id: 'contacts',   label: 'Contacts',          icon: BookUser },
-  // { id: 'radar',      label: 'Radar',             icon: Radar },            // v0.2 — speculative feature
-  // { id: 'services',   label: 'Services',          icon: Briefcase },        // hidden until wired to services table
-  // { id: 'forms',      label: 'Forms & Templates', icon: FileText },         // hidden until persistence wired
-  // { id: 'lead-forms', label: 'Lead Forms',        icon: ClipboardList },    // hidden until submission endpoint wired
-  // { id: 'portfolio',  label: 'Portfolio',         icon: Image },            // hidden until wired to portfolio_items
-  // { id: 'files',      label: 'Files & Templates', icon: FolderOpen },       // hidden until storage wired
-  // { id: 'reports',    label: 'Reports',           icon: BarChart3 },        // hidden until enough real data exists
-  // { id: 'pricing',    label: 'Pricing',           icon: Tag },              // hidden — fake data
+  { id: 'radar',      label: 'Radar',             icon: Radar },
+  { id: 'services',   label: 'Services',          icon: Briefcase },
+  { id: 'forms',      label: 'Forms & Templates', icon: FileText },
+  { id: 'lead-forms', label: 'Lead Forms',        icon: ClipboardList },
+  { id: 'portfolio',  label: 'Portfolio',         icon: Image },
+  { id: 'files',      label: 'Files & Templates', icon: FolderOpen },
+  { id: 'reports',    label: 'Reports',           icon: BarChart3 },
+  { id: 'pricing',    label: 'Pricing',           icon: Tag },
 ];
 
 export default function Sidebar({ active, onNavigate, collapsed, onToggle, session }) {
