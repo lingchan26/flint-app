@@ -1,50 +1,63 @@
-import { useState } from 'react';
-import { Plus, X, Briefcase, CheckCircle, Image } from 'lucide-react';
-
-const initialServices = [
-  { id: 1, name: 'Brand Identity', category: 'Branding', rate: 280, unit: 'hour', qty: 1, description: 'Full brand identity including logo, colour palette, and typography.', active: true },
-  { id: 2, name: 'Packaging Design', category: 'Print', rate: 4500, unit: 'project', qty: 1, description: 'End-to-end packaging design for FMCG and consumer products.', active: true },
-  { id: 3, name: 'Social Media Kit', category: 'Digital', rate: 1800, unit: 'project', qty: 1, description: 'Templates and assets for Instagram, LinkedIn, and Facebook.', active: true },
-  { id: 4, name: 'Annual Report', category: 'Corporate', rate: 8000, unit: 'project', qty: 1, description: 'Designed annual report with data visualisation and editorial layout.', active: true },
-  { id: 5, name: 'CGI & 3D Render', category: 'CGI', rate: 350, unit: 'hour', qty: 1, description: 'Photorealistic product renders and scene visualisation.', active: true },
-  { id: 6, name: 'Motion Graphics', category: 'Motion', rate: 3200, unit: 'project', qty: 1, description: 'Animated explainers and brand videos up to 90 seconds.', active: false },
-  { id: 7, name: 'Food Stylist — Photography Day', category: 'Photography', rate: 2000, unit: 'day', qty: 1, description: '8 hours of Food Stylist at the photography studio. This service includes food preparation and sourcing, prop selection and arrangement, on-set food presentation and plating, colour correction guidance, up to 3 hero shots, and post-shoot clean-up. Perfect for brand campaigns, editorial shoots, and e-commerce product photography.', active: true },
-];
+import { useState, useEffect } from 'react';
+import { Plus, X, Briefcase, CheckCircle, Image, Loader, AlertCircle } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 const CATEGORIES = ['Branding', 'Print', 'Digital', 'Corporate', 'CGI', 'Motion', 'Photography', 'Advertising', 'Other'];
 const UNITS = ['Hour', 'Day', 'Week', 'Project', 'Month', 'Session', 'Word', 'Image'];
 
-function EditServiceModal({ service, onClose, onSave }) {
+const emptyForm = {
+  name: '', category: 'Branding', rate: '', unit: 'project',
+  qty: 1, description: '', active: true,
+};
+
+function rowToService(r) {
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category || 'Other',
+    rate: Number(r.rate) || 0,
+    unit: r.unit || 'project',
+    qty: r.qty || 1,
+    description: r.description || '',
+    active: r.active !== false,
+  };
+}
+
+function EditServiceModal({ service, onClose, onSave, saving }) {
   const [form, setForm] = useState({
     name: service.name,
     description: service.description || '',
     qty: service.qty || 1,
     unit: service.unit || 'project',
     rate: service.rate,
+    category: service.category || 'Other',
+    active: service.active !== false,
   });
 
   const total = (Number(form.qty) || 0) * (Number(form.rate) || 0);
 
   const handleSave = () => {
-    onSave({ ...service, ...form, rate: Number(form.rate), qty: Number(form.qty) });
-    onClose();
+    onSave({
+      ...service,
+      ...form,
+      rate: Number(form.rate),
+      qty: Number(form.qty),
+    });
   };
 
   return (
     <>
       <div style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
       }} onClick={onClose} />
       <div style={{
         position: 'fixed', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
         background: '#fff', borderRadius: 16, width: 600,
-        maxHeight: '90vh', zIndex: 201,
+        maxWidth: '95vw', maxHeight: '90vh', zIndex: 201,
         boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
-        {/* Header */}
         <div style={{
           padding: '20px 24px', borderBottom: '1px solid #e5e0d8',
           display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -63,30 +76,29 @@ function EditServiceModal({ service, onClose, onSave }) {
           </button>
           <div style={{ fontWeight: 700, fontSize: 18, color: '#1a1a1a', marginBottom: 4 }}>Edit service</div>
           <div style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
-            Add a service to reuse it later in invoices, proposals and brochures.
+            Update the details, pricing or status of this service.
           </div>
         </div>
 
-        {/* Body */}
         <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-          {/* Column headers */}
           <div style={{
             display: 'grid', gridTemplateColumns: '1fr 80px 120px 100px 100px',
             gap: 12, marginBottom: 8,
           }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Service Info</div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Qty</div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Unit</div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Price</div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total</div>
+            {['Service Info', 'Qty', 'Unit', 'Price', 'Total'].map(label => (
+              <div key={label} style={{
+                fontSize: 11, fontWeight: 600, color: '#9ca3af',
+                textTransform: 'uppercase', letterSpacing: '0.5px',
+              }}>
+                {label}
+              </div>
+            ))}
           </div>
 
-          {/* Main row */}
           <div style={{
             display: 'grid', gridTemplateColumns: '1fr 80px 120px 100px 100px',
             gap: 12, alignItems: 'start',
           }}>
-            {/* Left: image + name + desc */}
             <div>
               <div style={{
                 width: 80, height: 80, background: '#f3f4f6', borderRadius: 8,
@@ -111,7 +123,6 @@ function EditServiceModal({ service, onClose, onSave }) {
               />
             </div>
 
-            {/* Qty */}
             <div>
               <input
                 className="form-input"
@@ -122,7 +133,6 @@ function EditServiceModal({ service, onClose, onSave }) {
               />
             </div>
 
-            {/* Unit */}
             <div>
               <select
                 className="form-select"
@@ -133,7 +143,6 @@ function EditServiceModal({ service, onClose, onSave }) {
               </select>
             </div>
 
-            {/* Price */}
             <div style={{ position: 'relative' }}>
               <span style={{
                 position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
@@ -148,7 +157,6 @@ function EditServiceModal({ service, onClose, onSave }) {
               />
             </div>
 
-            {/* Total */}
             <div style={{ paddingTop: 9 }}>
               <span style={{ fontWeight: 700, fontSize: 15, color: '#1a1a1a' }}>
                 S${total.toLocaleString()}
@@ -156,30 +164,34 @@ function EditServiceModal({ service, onClose, onSave }) {
             </div>
           </div>
 
-          <button style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: '#3b82f6', fontSize: 13, fontWeight: 500,
-            marginTop: 12, padding: 0, display: 'flex', alignItems: 'center', gap: 4,
-          }}>
-            + Add sub item
-          </button>
+          <div style={{ marginTop: 20, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <div className="form-group" style={{ flex: 1, minWidth: 160 }}>
+              <label className="form-label">Category</label>
+              <select className="form-select" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <label className="toggle" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} />
+                <span className="toggle-slider" />
+                <span style={{ fontSize: 13, color: '#6b7280' }}>Active</span>
+              </label>
+            </div>
+          </div>
         </div>
 
-        {/* Footer */}
         <div style={{
           padding: '16px 24px', borderTop: '1px solid #e5e0d8',
           display: 'flex', gap: 10, justifyContent: 'flex-end',
         }}>
-          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
           <button
+            className="btn btn-primary"
             onClick={handleSave}
-            style={{
-              background: '#1a1a1a', color: '#fff', border: 'none',
-              borderRadius: 8, padding: '8px 20px', cursor: 'pointer',
-              fontWeight: 600, fontSize: 14,
-            }}
+            disabled={saving || !form.name?.trim()}
           >
-            Save
+            {saving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       </div>
@@ -188,30 +200,124 @@ function EditServiceModal({ service, onClose, onSave }) {
 }
 
 export default function Services() {
-  const [services, setServices] = useState(initialServices);
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const [showNew, setShowNew] = useState(false);
   const [editService, setEditService] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
-  const [form, setForm] = useState({ name: '', category: 'Branding', rate: '', unit: 'project', qty: 1, description: '', active: true });
+  const [form, setForm] = useState(emptyForm);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .from('services')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (cancelled) return;
+        if (error) throw error;
+        setServices((data || []).map(rowToService));
+      } catch (e) {
+        if (!cancelled) setError(e.message || 'Could not load services');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
-  const saveNew = () => {
-    if (!form.name || !form.rate) return;
-    setServices(s => [...s, { id: Date.now(), ...form, rate: Number(form.rate), qty: Number(form.qty) || 1 }]);
-    setShowNew(false);
-    setForm({ name: '', category: 'Branding', rate: '', unit: 'project', qty: 1, description: '', active: true });
-    showToast('Service added!');
-  };
+  async function saveNew() {
+    if (!form.name?.trim() || !form.rate) return;
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not signed in');
 
-  const toggleActive = (id) => {
-    setServices(s => s.map(sv => sv.id === id ? { ...sv, active: !sv.active } : sv));
-  };
+      const payload = {
+        user_id: user.id,
+        name: form.name.trim(),
+        category: form.category,
+        rate: Number(form.rate),
+        unit: form.unit,
+        qty: Number(form.qty) || 1,
+        description: form.description.trim() || null,
+        active: form.active,
+      };
+      const { data, error } = await supabase.from('services').insert(payload).select().single();
+      if (error) throw error;
+      setServices(s => [rowToService(data), ...s]);
+      setShowNew(false);
+      setForm(emptyForm);
+      showToast('Service added');
+    } catch (e) {
+      setError(e.message || 'Could not save service');
+    } finally {
+      setSaving(false);
+    }
+  }
 
-  const saveEdit = (updated) => {
-    setServices(s => s.map(sv => sv.id === updated.id ? updated : sv));
-    showToast('Service updated!');
-  };
+  async function saveEdit(updated) {
+    setSaving(true);
+    try {
+      const payload = {
+        name: updated.name?.trim(),
+        category: updated.category,
+        rate: Number(updated.rate),
+        unit: updated.unit,
+        qty: Number(updated.qty) || 1,
+        description: updated.description?.trim() || null,
+        active: updated.active,
+      };
+      const { data, error } = await supabase
+        .from('services')
+        .update(payload)
+        .eq('id', updated.id)
+        .select()
+        .single();
+      if (error) throw error;
+      setServices(s => s.map(sv => sv.id === updated.id ? rowToService(data) : sv));
+      setEditService(null);
+      showToast('Service updated');
+    } catch (e) {
+      setError(e.message || 'Could not update service');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleActive(id, currentActive) {
+    // Optimistic update
+    setServices(s => s.map(sv => sv.id === id ? { ...sv, active: !currentActive } : sv));
+    try {
+      const { error } = await supabase
+        .from('services')
+        .update({ active: !currentActive })
+        .eq('id', id);
+      if (error) throw error;
+    } catch (e) {
+      // Roll back on error
+      setServices(s => s.map(sv => sv.id === id ? { ...sv, active: currentActive } : sv));
+      setError(e.message || 'Could not toggle service');
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="page-content" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+        <Loader size={28} color="var(--slate-400)" style={{ animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="page-content">
@@ -222,94 +328,130 @@ export default function Services() {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-        {services.map(s => (
-          <div key={s.id} className="card" style={{ opacity: s.active ? 1 : 0.6, transition: 'opacity 0.2s' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: 10,
-                background: '#fef3c7', display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Briefcase size={18} color="#f59e0b" />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button
-                  onClick={() => setEditService(s)}
-                  style={{
-                    background: '#f3f4f6', border: 'none', borderRadius: 6,
-                    padding: '4px 10px', cursor: 'pointer', fontSize: 12,
-                    color: '#6b7280', fontWeight: 500,
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#e5e0d8'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#f3f4f6'}
-                >
-                  Edit
-                </button>
-                <label className="toggle">
-                  <input type="checkbox" checked={s.active} onChange={() => toggleActive(s.id)} />
-                  <span className="toggle-slider" />
-                </label>
-              </div>
-            </div>
-            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{s.name}</div>
-            <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>{s.category}</div>
-            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16, lineHeight: 1.5 }}>{s.description}</div>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              paddingTop: 12, borderTop: '1px solid #f0ece4',
-            }}>
-              <span style={{ fontSize: 18, fontWeight: 700, color: '#1a1a1a' }}>
-                S${s.rate.toLocaleString()}
-              </span>
-              <span style={{
-                fontSize: 12, color: '#9ca3af',
-                background: '#f3f4f6', padding: '3px 8px', borderRadius: 6,
-              }}>
-                per {s.unit}
-              </span>
-            </div>
+      {error && (
+        <div style={{
+          background: '#fef2f2', border: '1px solid #fecaca',
+          borderRadius: 10, padding: 14, marginBottom: 16,
+          display: 'flex', gap: 10, alignItems: 'flex-start',
+        }}>
+          <AlertCircle size={18} color="#991b1b" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1, fontSize: 13, color: '#7f1d1d' }}>{error}</div>
+          <button
+            onClick={() => setError(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7f1d1d' }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {services.length === 0 ? (
+        <div className="card" style={{ padding: 48, textAlign: 'center' }}>
+          <div style={{
+            width: 56, height: 56, margin: '0 auto 16px', borderRadius: 14,
+            background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Briefcase size={26} color="#f59e0b" />
           </div>
-        ))}
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>No services yet</div>
+          <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 18, maxWidth: 360, marginLeft: 'auto', marginRight: 'auto' }}>
+            Add the services you offer — they'll be reusable across invoices, proposals and brochures.
+          </div>
+          <button className="btn btn-primary" onClick={() => setShowNew(true)}>
+            <Plus size={16} /> Add your first service
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+          {services.map(s => (
+            <div key={s.id} className="card" style={{ opacity: s.active ? 1 : 0.6, transition: 'opacity 0.2s' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                <div style={{
+                  width: 40, height: 40, borderRadius: 10,
+                  background: '#fef3c7', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Briefcase size={18} color="#f59e0b" />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    onClick={() => setEditService(s)}
+                    style={{
+                      background: '#f3f4f6', border: 'none', borderRadius: 6,
+                      padding: '4px 10px', cursor: 'pointer', fontSize: 12,
+                      color: '#6b7280', fontWeight: 500,
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#e5e0d8'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#f3f4f6'}
+                  >
+                    Edit
+                  </button>
+                  <label className="toggle">
+                    <input type="checkbox" checked={s.active} onChange={() => toggleActive(s.id, s.active)} />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
+              </div>
+              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{s.name}</div>
+              <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>{s.category}</div>
+              {s.description && (
+                <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16, lineHeight: 1.5 }}>{s.description}</div>
+              )}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                paddingTop: 12, borderTop: '1px solid #f0ece4',
+              }}>
+                <span style={{ fontSize: 18, fontWeight: 700, color: '#1a1a1a' }}>
+                  S${s.rate.toLocaleString()}
+                </span>
+                <span style={{
+                  fontSize: 12, color: '#9ca3af',
+                  background: '#f3f4f6', padding: '3px 8px', borderRadius: 6,
+                }}>
+                  per {s.unit}
+                </span>
+              </div>
+            </div>
+          ))}
 
-        {/* Add new card */}
-        <button
-          onClick={() => setShowNew(true)}
-          style={{
-            background: 'transparent',
-            border: '2px dashed #e5e0d8',
-            borderRadius: 12,
-            padding: 24,
-            cursor: 'pointer',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            color: '#9ca3af',
-            transition: 'all 0.15s',
-            minHeight: 160,
-          }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#f59e0b'; e.currentTarget.style.color = '#f59e0b'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#e5e0d8'; e.currentTarget.style.color = '#9ca3af'; }}
-        >
-          <Plus size={24} />
-          <span style={{ fontSize: 14, fontWeight: 500 }}>Add Service</span>
-        </button>
-      </div>
+          <button
+            onClick={() => setShowNew(true)}
+            style={{
+              background: 'transparent',
+              border: '2px dashed #e5e0d8',
+              borderRadius: 12,
+              padding: 24,
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              color: '#9ca3af',
+              transition: 'all 0.15s',
+              minHeight: 160,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#f59e0b'; e.currentTarget.style.color = '#f59e0b'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#e5e0d8'; e.currentTarget.style.color = '#9ca3af'; }}
+          >
+            <Plus size={24} />
+            <span style={{ fontSize: 14, fontWeight: 500 }}>Add Service</span>
+          </button>
+        </div>
+      )}
 
-      {/* Edit Service Modal */}
       {editService && (
         <EditServiceModal
           service={editService}
-          onClose={() => setEditService(null)}
+          onClose={() => !saving && setEditService(null)}
           onSave={saveEdit}
+          saving={saving}
         />
       )}
 
       {showNew && (
         <>
-          <div className="overlay" onClick={() => setShowNew(false)} />
+          <div className="overlay" onClick={() => !saving && setShowNew(false)} />
           <div className="slide-panel">
             <div className="slide-panel-header">
               <span className="slide-panel-title">Add Service</span>
@@ -357,8 +499,14 @@ export default function Services() {
               </div>
             </div>
             <div className="slide-panel-footer">
-              <button className="btn btn-secondary" onClick={() => setShowNew(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={saveNew}>Add Service</button>
+              <button className="btn btn-secondary" onClick={() => setShowNew(false)} disabled={saving}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                onClick={saveNew}
+                disabled={saving || !form.name?.trim() || !form.rate}
+              >
+                {saving ? 'Saving…' : 'Add Service'}
+              </button>
             </div>
           </div>
         </>
