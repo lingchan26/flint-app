@@ -1,142 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../../lib/supabase';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  LineChart, Line,
-} from 'recharts';
-
-const sparkData = {
-  revenue:   [{ v: 18200 }, { v: 22400 }, { v: 14800 }, { v: 28600 }, { v: 31200 }, { v: 26800 }],
-  projects:  [{ v: 8 }, { v: 9 }, { v: 11 }, { v: 10 }, { v: 12 }, { v: 12 }],
-  collected: [{ v: 12000 }, { v: 15000 }, { v: 11000 }, { v: 17000 }, { v: 20000 }, { v: 18400 }],
-  clients:   [{ v: 5 }, { v: 6 }, { v: 7 }, { v: 7 }, { v: 8 }, { v: 9 }],
-};
-
-function TrendBadge({ trend, dir }) {
-  const up = dir === 'up';
-  const neutral = dir === 'neutral';
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center',
-      fontSize: 10, borderRadius: 20, padding: '2px 8px', fontWeight: 600,
-      background: neutral ? '#f3f4f6' : up ? '#dcfce7' : '#fee2e2',
-      color: neutral ? '#6b7280' : up ? '#166534' : '#991b1b',
-    }}>
-      {neutral ? '→' : up ? '↑' : '↓'} {trend}
-    </span>
-  );
-}
-
-function Sparkline({ data, color }) {
-  return (
-    <ResponsiveContainer width="100%" height={40}>
-      <LineChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 4 }}>
-        <Line
-          type="monotone"
-          dataKey="v"
-          stroke={color}
-          strokeWidth={1.5}
-          dot={false}
-          isAnimationActive={false}
-        />
-      </LineChart>
-    </ResponsiveContainer>
-  );
-}
-import {
-  TrendingUp, FolderKanban, DollarSign, Users, ArrowUpRight,
-  Settings, CalendarDays, Plus, X, CheckCircle, Zap, AlertTriangle,
-  Bell, Mail
+  FolderKanban, DollarSign, BookUser,
+  Calendar as CalendarIcon, ArrowRight, AlertCircle, Loader,
+  Receipt, Wallet,
 } from 'lucide-react';
 
-const monthlyData = [
-  { month: 'Oct', income: 18200, expenses: 4200 },
-  { month: 'Nov', income: 22400, expenses: 5100 },
-  { month: 'Dec', income: 14800, expenses: 3800 },
-  { month: 'Jan', income: 28600, expenses: 6200 },
-  { month: 'Feb', income: 31200, expenses: 7400 },
-  { month: 'Mar', income: 26800, expenses: 5900 },
-];
+/* ─── helpers ──────────────────────────────────────────────────────────── */
 
-const recentProjects = [
-  { name: 'Brand Refresh – Lumen Co', client: 'Lumen Co', stage: 'Delivery', value: 8500, due: '10 Apr 2026' },
-  { name: 'Annual Report – Vertex', client: 'Vertex Inc', stage: 'Planning', value: 12000, due: '18 Apr 2026' },
-  { name: 'Packaging Design – Bloom', client: 'Bloom Foods', stage: 'Proposal', value: 4200, due: '22 Apr 2026' },
-  { name: 'Social Media Kit – Kova', client: 'Kova Studio', stage: 'Kick Off', value: 3600, due: '28 Apr 2026' },
-  { name: 'Website Redesign – Novu', client: 'Novu Tech', stage: 'Discovery', value: 15000, due: '5 May 2026' },
-];
-
-const stageColor = {
-  'New': '#9ca3af', 'Discovery': '#3b82f6', 'Proposal': '#f59e0b',
-  'Contract Signed': '#8b5cf6', 'Kick Off': '#f59e0b',
-  'Onboarding': '#06b6d4', 'Planning': '#3b82f6',
-  'Delivery': '#10b981', 'Completed': '#6b7280',
-};
-
-const stageBg = {
-  'New': '#f3f4f6', 'Discovery': '#dbeafe', 'Proposal': '#fef3c7',
-  'Contract Signed': '#ede9fe', 'Kick Off': '#fef3c7',
-  'Onboarding': '#cffafe', 'Planning': '#dbeafe',
-  'Delivery': '#d1fae5', 'Completed': '#f3f4f6',
-};
-
-const upcomingDeadlines = [
-  { project: 'Brand Refresh – Lumen Co', days: 5, color: '#f59e0b' },
-  { project: 'Annual Report – Vertex', days: 7, color: '#f59e0b' },
-  { project: 'Packaging Design – Bloom', days: 12, color: '#10b981' },
-  { project: 'Social Media Kit – Kova', days: 18, color: '#10b981' },
-];
-
-const pipelineStages = [
-  { name: 'New', count: 12 },
-  { name: 'Discovery', count: 9 },
-  { name: 'Proposal', count: 7 },
-  { name: 'Contract Signed', count: 5 },
-  { name: 'Kick Off', count: 4 },
-  { name: 'Onboarding', count: 4 },
-  { name: 'Planning', count: 3 },
-  { name: 'Delivery', count: 3 },
-  { name: 'Completed', count: 0 },
-];
-
-const weekItems = [
-  { day: 'Mon', title: 'Brand Refresh kickoff call', type: 'Meeting' },
-  { day: 'Wed', title: 'Annual Report draft due', type: 'Deadline' },
-  { day: 'Fri', title: 'Invoice #027 — Bloom Foods', type: 'Invoice' },
-];
-
-const typeColor = {
-  Meeting: { bg: '#dbeafe', color: '#1e40af' },
-  Deadline: { bg: '#fef3c7', color: '#92400e' },
-  Invoice: { bg: '#d1fae5', color: '#065f46' },
-};
-
-const ALL_WIDGETS = [
-  { id: 'stats', label: 'Revenue Stats' },
-  { id: 'headspace', label: 'Headspace' },
-  { id: 'pipeline', label: 'Pipeline Overview' },
-  { id: 'payments', label: 'Payments Bar' },
-  { id: 'chart', label: 'Income vs Expenses Chart' },
-  { id: 'target', label: 'Revenue Target' },
-  { id: 'week', label: 'This Week' },
-  { id: 'projects', label: 'Recent Projects' },
-  { id: 'activity', label: 'Activity Feed' },
-  { id: 'deadlines', label: 'Upcoming Deadlines' },
-  { id: 'brief', label: 'Flint Brief' },
-];
-
-function getGreeting() {
+function getGreeting(name) {
   const h = new Date().getHours();
-  if (h >= 5 && h <= 11) return 'Good morning, Ling 🌤';
-  if (h >= 12 && h <= 16) return 'Good afternoon, Ling ☀️';
-  if (h >= 17 && h <= 20) return 'Good evening, Ling 🌅';
-  if (h >= 21 && h <= 23) return "It's a little late, Ling 🌙";
-  return "What's happening, Ling 👋";
+  const n = name || 'there';
+  if (h >= 5 && h <= 11) return `Good morning, ${n}`;
+  if (h >= 12 && h <= 16) return `Good afternoon, ${n}`;
+  if (h >= 17 && h <= 20) return `Good evening, ${n}`;
+  if (h >= 21 && h <= 23) return `Working late, ${n}?`;
+  return `Hi ${n}`;
 }
 
-function formatDate(d) {
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+function formatLongDate(d) {
+  return d.toLocaleDateString('en-SG', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
 }
 
 function formatTime(d) {
@@ -148,87 +33,283 @@ function formatTime(d) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')} ${ampm}`;
 }
 
-export default function Dashboard({ onNavigate }) {
-  const [now, setNow] = useState(new Date());
-  const [showCustomise, setShowCustomise] = useState(false);
-  const [visibleWidgets, setVisibleWidgets] = useState(
-    Object.fromEntries(ALL_WIDGETS.map(w => [w.id, true]))
-  );
-  const [showNewProject, setShowNewProject] = useState(false);
-  const [newProject, setNewProject] = useState({ name: '', client: '', stage: 'New', dueDate: '', value: '' });
-  const [showRiskPulse, setShowRiskPulse] = useState(true);
-  const [showNudge, setShowNudge] = useState(true);
-  const [showRateCheck, setShowRateCheck] = useState(true);
+function formatShortDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
+function daysUntil(iso) {
+  if (!iso) return null;
+  const ms = new Date(iso).getTime() - Date.now();
+  return Math.ceil(ms / (1000 * 60 * 60 * 24));
+}
+
+const SGD = (n) => `S$${(Number(n) || 0).toLocaleString('en-SG', { maximumFractionDigits: 0 })}`;
+
+const stageColor = {
+  'New': '#9ca3af', 'Discovery': '#3b82f6', 'Proposal': '#f59e0b',
+  'Contract Signed': '#8b5cf6', 'Kick Off': '#f59e0b',
+  'Onboarding': '#06b6d4', 'Planning': '#3b82f6',
+  'Delivery': '#10b981', 'Completed': '#6b7280',
+};
+const stageBg = {
+  'New': '#f3f4f6', 'Discovery': '#dbeafe', 'Proposal': '#fef3c7',
+  'Contract Signed': '#ede9fe', 'Kick Off': '#fef3c7',
+  'Onboarding': '#cffafe', 'Planning': '#dbeafe',
+  'Delivery': '#d1fae5', 'Completed': '#f3f4f6',
+};
+const STAGE_ORDER = ['New', 'Discovery', 'Proposal', 'Contract Signed', 'Kick Off', 'Onboarding', 'Planning', 'Delivery', 'Completed'];
+
+/* ─── component ────────────────────────────────────────────────────────── */
+
+export default function Dashboard({ onNavigate, session }) {
+  const [now, setNow] = useState(new Date());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const [projects, setProjects] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [contactsCount, setContactsCount] = useState(0);
+
+  const firstName = (session?.user?.user_metadata?.full_name?.split(' ')[0])
+    || (session?.user?.email?.split('@')[0])
+    || null;
+
+  // Ticking clock (1s)
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  const toggleWidget = (id) => {
-    setVisibleWidgets(w => ({ ...w, [id]: !w[id] }));
-  };
+  // Load data once on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [projectsRes, invoicesRes, expensesRes, contactsRes] = await Promise.all([
+          supabase.from('projects').select('*').eq('archived', false),
+          supabase.from('invoices').select('*'),
+          supabase.from('expenses').select('*'),
+          supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('archived', false),
+        ]);
+        if (cancelled) return;
+        if (projectsRes.error) throw projectsRes.error;
+        if (invoicesRes.error) throw invoicesRes.error;
+        if (expensesRes.error) throw expensesRes.error;
+        // contactsRes.error tolerated — leaves count at 0
+        setProjects(projectsRes.data || []);
+        setInvoices(invoicesRes.data || []);
+        setExpenses(expensesRes.data || []);
+        setContactsCount(contactsRes.count || 0);
+      } catch (e) {
+        if (!cancelled) setError(e.message || 'Could not load dashboard data');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
-  const show = (id) => visibleWidgets[id];
+  /* ─── derived metrics ─────────────────────────────────────────────── */
 
-  const daysLeftInWeek = () => {
-    const day = new Date().getDay();
-    return day === 0 ? 1 : 7 - day;
-  };
+  const monthStart = useMemo(() => new Date(now.getFullYear(), now.getMonth(), 1), [now]);
+
+  const activeProjects = useMemo(
+    () => projects.filter(p => p.stage !== 'Completed'),
+    [projects]
+  );
+
+  const thisMonthInvoiced = useMemo(() =>
+    invoices
+      .filter(i => i.created_at && new Date(i.created_at) >= monthStart)
+      .reduce((sum, i) => sum + (Number(i.amount) || 0), 0),
+    [invoices, monthStart]
+  );
+
+  const thisMonthPaid = useMemo(() =>
+    invoices
+      .filter(i => i.status === 'Paid' && i.paid_at && new Date(i.paid_at) >= monthStart)
+      .reduce((sum, i) => sum + (Number(i.amount) || 0), 0),
+    [invoices, monthStart]
+  );
+
+  const thisMonthExpenses = useMemo(() =>
+    expenses
+      .filter(e => e.date && new Date(e.date) >= monthStart)
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0),
+    [expenses, monthStart]
+  );
+
+  const overdueInvoiceCount = useMemo(
+    () => invoices.filter(i =>
+      i.status === 'Overdue'
+      || (i.status !== 'Paid' && i.due_date && new Date(i.due_date) < now)
+    ).length,
+    [invoices, now]
+  );
+
+  const upcomingDeadlines = useMemo(() => {
+    const in14days = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+    return projects
+      .filter(p => p.end_date && p.stage !== 'Completed')
+      .filter(p => {
+        const d = new Date(p.end_date);
+        return d >= now && d <= in14days;
+      })
+      .sort((a, b) => new Date(a.end_date) - new Date(b.end_date))
+      .slice(0, 5);
+  }, [projects, now]);
+
+  const recentProjects = useMemo(() =>
+    [...projects]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 5),
+    [projects]
+  );
+
+  const pipelineCounts = useMemo(() => {
+    const counts = {};
+    projects.forEach(p => {
+      const s = p.stage || 'New';
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    return counts;
+  }, [projects]);
+
+  const hasAnyData = projects.length > 0 || invoices.length > 0 || expenses.length > 0 || contactsCount > 0;
+  const showPipeline = projects.length > 0;
+
+  /* ─── render ──────────────────────────────────────────────────────── */
+
+  if (loading) {
+    return (
+      <div className="page-content" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+        <Loader size={28} color="var(--slate-400)" className="spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="page-content">
+        <div style={{
+          background: '#fef2f2', border: '1px solid #fecaca',
+          borderRadius: 12, padding: 20, display: 'flex', gap: 12, alignItems: 'flex-start',
+        }}>
+          <AlertCircle size={20} color="#991b1b" style={{ flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>
+              Could not load your dashboard
+            </div>
+            <div style={{ fontSize: 13, color: '#7f1d1d' }}>{error}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-content">
-      {/* Top bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
+      {/* ─── Top bar: greeting + clock ──────────────────────────────── */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+        marginBottom: 28, flexWrap: 'wrap', gap: 12,
+      }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 700, color: '#1a1a1a', letterSpacing: '-0.5px', marginBottom: 4 }}>
-            {getGreeting()}
+            {getGreeting(firstName)}
           </h1>
-          <div style={{ fontSize: 13, color: '#6b7280' }}>{formatDate(now)}</div>
+          <div style={{ fontSize: 13, color: '#6b7280' }}>{formatLongDate(now)}</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#1a1a1a', letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums' }}>{formatTime(now)}</div>
-            <div style={{ fontSize: 12, color: '#9ca3af' }}>{formatDate(now)}</div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{
+            fontSize: 20, fontWeight: 700, color: '#1a1a1a',
+            letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums',
+          }}>
+            {formatTime(now)}
           </div>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setShowCustomise(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <Settings size={14} /> Customise
-          </button>
+          <div style={{ fontSize: 12, color: '#9ca3af' }}>Singapore time</div>
         </div>
       </div>
 
-      {/* ── Flint Brief (top position) ── */}
-      {show('brief') && (
+      {/* ─── New-user welcome (only when truly empty) ────────────────── */}
+      {!hasAnyData && (
         <div style={{
           background: '#fffbeb', border: '1px solid #fde68a',
           borderLeft: '4px solid #f59e0b', borderRadius: 12,
-          padding: '14px 18px', marginBottom: 20,
-          display: 'flex', gap: 14, alignItems: 'flex-start',
+          padding: 20, marginBottom: 24,
         }}>
-          <Mail size={18} color="#f59e0b" style={{ flexShrink: 0, marginTop: 2 }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#78350f', marginBottom: 6 }}>
-              Flint Brief — {formatDate(now)}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div style={{ fontSize: 13, color: '#78350f' }}>• <strong>Today:</strong> Discovery call with Bloom Foods at 10am · Proposal for Novu Tech due today</div>
-              <div style={{ fontSize: 13, color: '#78350f' }}>• <strong>This week:</strong> 28 hrs booked of 40hr capacity · S$12,400 in payments expected</div>
-              <div style={{ fontSize: 13, color: '#78350f' }}>• <strong>Action:</strong> Haven't followed up with Kova Studio in 34 days — repeat client</div>
-            </div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#78350f', marginBottom: 8 }}>
+            Welcome to Flint 👋
           </div>
-          <button className="btn btn-secondary btn-sm" onClick={() => onNavigate('setup')}>
-            Configure
+          <div style={{ fontSize: 13, color: '#78350f', marginBottom: 14, lineHeight: 1.6 }}>
+            Your workspace is empty for now. The fastest way to make Flint useful is to add a
+            contact, set up a project, and log your first expense or invoice. Setup will walk you
+            through it.
+          </div>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => onNavigate('setup')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            Go to Setup <ArrowRight size={14} />
           </button>
         </div>
       )}
 
-      {/* ── Create New quick bar ── */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--slate-400)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+      {/* ─── Stat cards ──────────────────────────────────────────────── */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: 14, marginBottom: 28,
+      }}>
+        <StatCard
+          icon={FolderKanban}
+          label="Active projects"
+          value={activeProjects.length}
+          tone="emerald"
+          onClick={() => onNavigate('projects')}
+        />
+        <StatCard
+          icon={Receipt}
+          label="Invoiced this month"
+          value={invoices.length === 0 ? '—' : SGD(thisMonthInvoiced)}
+          tone="amber"
+          onClick={() => onNavigate('income')}
+        />
+        <StatCard
+          icon={DollarSign}
+          label="Paid this month"
+          value={invoices.length === 0 ? '—' : SGD(thisMonthPaid)}
+          tone="emerald"
+          sub={overdueInvoiceCount > 0 ? `${overdueInvoiceCount} overdue` : null}
+          onClick={() => onNavigate('income')}
+        />
+        <StatCard
+          icon={Wallet}
+          label="Expenses this month"
+          value={expenses.length === 0 ? '—' : SGD(thisMonthExpenses)}
+          tone="slate"
+          onClick={() => onNavigate('income')}
+        />
+        <StatCard
+          icon={BookUser}
+          label="Contacts"
+          value={contactsCount}
+          tone="blue"
+          onClick={() => onNavigate('contacts')}
+        />
+      </div>
+
+      {/* ─── Create new (limited to v0.1 routes) ─────────────────────── */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{
+          fontSize: 12, fontWeight: 700, color: 'var(--slate-400)',
+          textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10,
+        }}>
           Create new
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -236,9 +317,8 @@ export default function Dashboard({ onNavigate }) {
             { label: 'Contact', icon: '👤', page: 'contacts', color: '#dbeafe', text: '#1e40af' },
             { label: 'Project', icon: '📁', page: 'projects', color: '#d1fae5', text: '#065f46' },
             { label: 'Invoice', icon: '💳', page: 'income', color: '#fef3c7', text: '#92400e' },
-            { label: 'Meeting', icon: '📅', page: 'calendar', color: '#ede9fe', text: '#5b21b6' },
-            { label: 'Task',    icon: '✅', page: 'calendar', color: '#f0fdf4', text: '#166534' },
-            { label: 'Lead Form', icon: '📋', page: 'lead-forms', color: '#f5f3ff', text: '#5b21b6' },
+            { label: 'Expense', icon: '🧾', page: 'income', color: '#f3f4f6', text: '#374151' },
+            { label: 'Calendar event', icon: '📅', page: 'calendar', color: '#ede9fe', text: '#5b21b6' },
           ].map(({ label, icon, page, color, text }) => (
             <button
               key={label}
@@ -248,583 +328,234 @@ export default function Dashboard({ onNavigate }) {
                 padding: '8px 14px', borderRadius: 9,
                 background: color, border: 'none', cursor: 'pointer',
                 fontSize: 13, fontWeight: 600, color: text,
-                transition: 'transform 100ms, box-shadow 100ms',
-                boxShadow: 'var(--shadow-xs)',
               }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'var(--shadow-xs)'; }}
             >
-              <span style={{ fontSize: 15 }}>{icon}</span>
-              {label}
+              <span>{icon}</span>
+              <span>{label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Stats */}
-      {show('stats') && (
-        <div className="stats-grid" style={{ marginBottom: 24 }}>
-          <div className="stat-card">
-            <div className="stat-icon" style={{ background: '#fef3c7' }}>
-              <DollarSign size={20} color="#f59e0b" />
+      {/* ─── Two columns: deadlines + recent projects ────────────────── */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+        gap: 18, marginBottom: 28,
+      }}>
+        <Panel title="Upcoming deadlines" subtitle="Projects due in the next 14 days">
+          {upcomingDeadlines.length === 0 ? (
+            <EmptyMini
+              icon={CalendarIcon}
+              text={projects.length === 0
+                ? 'No projects yet'
+                : 'Nothing due in the next 14 days'}
+            />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {upcomingDeadlines.map(p => {
+                const d = daysUntil(p.end_date);
+                const tone = d <= 3 ? '#ef4444' : d <= 7 ? '#f59e0b' : '#10b981';
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => onNavigate('projects')}
+                    style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '10px 12px', borderRadius: 8,
+                      background: '#fafaf7', cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                        {p.client || 'No client'} · Due {formatShortDate(p.end_date)}
+                      </div>
+                    </div>
+                    <div style={{
+                      fontSize: 11, fontWeight: 700, color: tone,
+                      whiteSpace: 'nowrap', marginLeft: 10,
+                    }}>
+                      {d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `${d}d`}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="stat-label">Revenue (MTD)</div>
-              <div className="stat-value">S$26,800</div>
-              <Sparkline data={sparkData.revenue} color="#f59e0b" />
-              <TrendBadge trend="12%" dir="up" />
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon" style={{ background: '#dbeafe' }}>
-              <FolderKanban size={20} color="#3b82f6" />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="stat-label">Active Projects</div>
-              <div className="stat-value">12</div>
-              <Sparkline data={sparkData.projects} color="#3b82f6" />
-              <TrendBadge trend="+2" dir="up" />
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon" style={{ background: '#d1fae5' }}>
-              <TrendingUp size={20} color="#10b981" />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="stat-label">Collected</div>
-              <div className="stat-value">S$18,400</div>
-              <Sparkline data={sparkData.collected} color="#10b981" />
-              <TrendBadge trend="8%" dir="up" />
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon" style={{ background: '#ede9fe' }}>
-              <Users size={20} color="#8b5cf6" />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="stat-label">Active Clients</div>
-              <div className="stat-value">9</div>
-              <Sparkline data={sparkData.clients} color="#8b5cf6" />
-              <TrendBadge trend="+2" dir="up" />
-            </div>
-          </div>
-        </div>
-      )}
+          )}
+        </Panel>
 
-      {/* Headspace — compact */}
-      {show('headspace') && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div className="card-title" style={{ margin: 0 }}>Headspace <span style={{ fontSize: 11, color: 'var(--slate-400)', fontWeight: 400, marginLeft: 6 }}>capacity at a glance</span></div>
-            <Zap size={15} color="var(--amber)" fill="var(--amber)" />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', marginBottom: 12 }}>
-            {[
-              { label: 'This Week', used: 28, total: 40, pct: 70 },
-              { label: 'This Month', used: 112, total: 160, pct: 70 },
-            ].map(h => (
-              <div key={h.label}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-700)' }}>{h.label}</span>
-                  <span style={{ fontSize: 11, color: 'var(--slate-400)' }}>{h.used}h / {h.total}h</span>
-                </div>
-                <div style={{ height: 6, borderRadius: 999, background: 'var(--slate-100)', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${h.pct}%`, borderRadius: 999,
-                    background: h.pct >= 90 ? 'var(--danger)' : h.pct >= 70 ? 'var(--amber)' : 'var(--success)' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {[
-              { icon: '🎨', label: 'Brand', hrs: '12h', color: '#fef3c7', text: '#92400e' },
-              { icon: '📦', label: 'Packaging', hrs: '8h', color: '#dbeafe', text: '#1e40af' },
-              { icon: '📱', label: 'Social', hrs: '4h', color: '#d1fae5', text: '#065f46' },
-              { icon: '💻', label: 'CGI', hrs: '4h', color: '#ede9fe', text: '#5b21b6' },
-            ].map(item => (
-              <span key={item.label} style={{
-                background: item.color, color: item.text,
-                padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 500,
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}>
-                {item.icon} {item.label} · {item.hrs}
-              </span>
-            ))}
-            <span style={{ fontSize: 12, color: 'var(--slate-400)', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
-              <Zap size={12} color="var(--amber)" fill="var(--amber)" />
-              Room for 1 small project this week
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Risk Pulse Banner */}
-      {show('pipeline') && showRiskPulse && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          background: '#fffbeb', border: '1px solid #fde68a',
-          borderLeft: '4px solid #f59e0b',
-          borderRadius: 10, padding: '12px 16px', marginBottom: 12,
-        }}>
-          <AlertTriangle size={16} color="#d97706" style={{ flexShrink: 0 }} />
-          <span style={{ fontSize: 13, color: '#78350f', flex: 1, lineHeight: 1.5 }}>
-            <strong>Risk Pulse</strong> — 68% of your revenue this quarter came from Vertex Inc. Consider diversifying.
-          </span>
-          <button
-            onClick={() => setShowRiskPulse(false)}
-            style={{
-              background: 'none', border: '1px solid #d1d5db', borderRadius: 6,
-              padding: '3px 10px', fontSize: 12, color: '#6b7280', cursor: 'pointer',
-              whiteSpace: 'nowrap', flexShrink: 0,
-            }}
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* Pipeline Nudge Banner */}
-      {show('pipeline') && showNudge && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          background: '#eff6ff', border: '1px solid #bfdbfe',
-          borderLeft: '4px solid #3b82f6',
-          borderRadius: 10, padding: '12px 16px', marginBottom: 12,
-        }}>
-          <Bell size={16} color="#2563eb" style={{ flexShrink: 0 }} />
-          <span style={{ fontSize: 13, color: '#1e3a8a', flex: 1, lineHeight: 1.5 }}>
-            <strong>Pipeline Nudge</strong> — 3 proposals have had no movement in 14+ days. Time to follow up?
-          </span>
-          <button
-            onClick={() => setShowNudge(false)}
-            style={{
-              background: '#f59e0b', border: 'none', borderRadius: 6,
-              padding: '3px 10px', fontSize: 12, color: '#fff', cursor: 'pointer',
-              fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0,
-            }}
-          >
-            View Proposals
-          </button>
-        </div>
-      )}
-
-      {/* Pipeline Overview */}
-      {show('pipeline') && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div className="card-header">
-            <div className="card-title">Pipeline overview</div>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {pipelineStages.map(s => {
-              const isCompleted = s.name === 'Completed' && s.count === 0;
-              return (
+        <Panel title="Recent projects" subtitle="Your 5 most recently created">
+          {recentProjects.length === 0 ? (
+            <EmptyMini
+              icon={FolderKanban}
+              text="No projects yet"
+              cta={{ label: 'Create your first', onClick: () => onNavigate('projects') }}
+            />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {recentProjects.map(p => (
                 <div
-                  key={s.name}
+                  key={p.id}
+                  onClick={() => onNavigate('projects')}
                   style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    background: isCompleted ? '#f3f4f6' : '#fef3c7',
-                    borderRadius: 999,
-                    padding: '6px 12px 6px 14px',
-                    cursor: 'pointer',
-                    border: 'none',
-                    transition: 'all 0.15s',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '10px 12px', borderRadius: 8,
+                    background: '#fafaf7', cursor: 'pointer',
                   }}
                 >
-                  <span style={{ fontSize: 13, fontWeight: 500, color: isCompleted ? '#6b7280' : '#92400e' }}>
-                    {s.name}
-                  </span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                      {p.client || 'No client'}
+                      {p.value ? ` · ${SGD(p.value)}` : ''}
+                    </div>
+                  </div>
                   <span style={{
-                    background: isCompleted ? '#9ca3af' : '#f59e0b',
-                    color: '#fff',
-                    borderRadius: '50%',
-                    width: 20, height: 20,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 700, flexShrink: 0,
+                    fontSize: 10, fontWeight: 700,
+                    padding: '3px 8px', borderRadius: 20,
+                    background: stageBg[p.stage] || '#f3f4f6',
+                    color: stageColor[p.stage] || '#6b7280',
+                    whiteSpace: 'nowrap', marginLeft: 10,
                   }}>
-                    {s.count}
+                    {p.stage || 'New'}
                   </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+      </div>
+
+      {/* ─── Pipeline overview (only if there are projects) ──────────── */}
+      {showPipeline && (
+        <Panel title="Pipeline" subtitle="Projects by stage">
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
+            gap: 8,
+          }}>
+            {STAGE_ORDER.map(stage => {
+              const count = pipelineCounts[stage] || 0;
+              return (
+                <div
+                  key={stage}
+                  onClick={() => onNavigate('projects')}
+                  style={{
+                    padding: '12px 10px', borderRadius: 8,
+                    background: count > 0 ? (stageBg[stage] || '#f3f4f6') : '#fafaf7',
+                    cursor: 'pointer', textAlign: 'center',
+                    opacity: count > 0 ? 1 : 0.5,
+                  }}
+                >
+                  <div style={{
+                    fontSize: 22, fontWeight: 700,
+                    color: count > 0 ? (stageColor[stage] || '#6b7280') : '#9ca3af',
+                    lineHeight: 1,
+                  }}>
+                    {count}
+                  </div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', marginTop: 6 }}>
+                    {stage}
+                  </div>
                 </div>
               );
             })}
           </div>
-        </div>
+        </Panel>
       )}
 
-      {/* Rate Check Banner */}
-      {showRateCheck && (
+      <style>{`
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
+  );
+}
+
+/* ─── small sub-components ─────────────────────────────────────────────── */
+
+function StatCard({ icon: Icon, label, value, sub, tone = 'slate', onClick }) {
+  const toneMap = {
+    emerald: { bg: '#d1fae5', fg: '#065f46' },
+    amber:   { bg: '#fef3c7', fg: '#92400e' },
+    blue:    { bg: '#dbeafe', fg: '#1e40af' },
+    slate:   { bg: '#f3f4f6', fg: '#374151' },
+  };
+  const t = toneMap[tone] || toneMap.slate;
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: '#fff', borderRadius: 12,
+        border: '1px solid #e5e0d8', padding: '16px 18px',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'box-shadow 0.1s',
+      }}
+      onMouseEnter={(e) => { if (onClick) e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; }}
+      onMouseLeave={(e) => { if (onClick) e.currentTarget.style.boxShadow = 'none'; }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          background: '#f5f3ff', border: '1px solid #ddd6fe',
-          borderLeft: '4px solid #8b5cf6',
-          borderRadius: 10, padding: '12px 16px', marginBottom: 24,
+          width: 32, height: 32, borderRadius: 8,
+          background: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <TrendingUp size={16} color="#7c3aed" style={{ flexShrink: 0 }} />
-          <span style={{ fontSize: 13, color: '#3b0764', flex: 1, lineHeight: 1.5 }}>
-            <strong>Rate Check</strong> — You've charged Lumen Co the same day rate for 22 months. Consider a rate conversation.
-          </span>
-          <button
-            onClick={() => setShowRateCheck(false)}
-            style={{
-              background: 'none', border: '1px solid #d1d5db', borderRadius: 6,
-              padding: '3px 10px', fontSize: 12, color: '#6b7280', cursor: 'pointer',
-              whiteSpace: 'nowrap', flexShrink: 0,
-            }}
-          >
-            Dismiss
-          </button>
+          <Icon size={16} color={t.fg} />
+        </div>
+        <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{label}</div>
+      </div>
+      <div style={{
+        fontSize: 24, fontWeight: 700, color: '#1a1a1a',
+        letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums',
+      }}>
+        {value}
+      </div>
+      {sub && (
+        <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 600, marginTop: 4 }}>
+          {sub}
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* Payments Bar + This Week */}
-      <div className="two-col-grid" style={{ marginBottom: 24 }}>
-        {/* Payments Bar */}
-        {show('payments') && (
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">Payments</div>
-            </div>
-            <div style={{ marginBottom: 4 }}>
-              <span style={{ fontSize: 28, fontWeight: 700, color: '#1a1a1a' }}>S$11,640</span>
-              <span style={{ fontSize: 13, color: '#9ca3af', marginLeft: 8 }}>April gross</span>
-            </div>
-            {/* Segmented bar */}
-            <div style={{
-              display: 'flex', height: 12, borderRadius: 999,
-              overflow: 'hidden', marginBottom: 16, marginTop: 12,
-            }}>
-              <div style={{ width: '53%', background: '#3d9970', borderRadius: '999px 0 0 999px' }} />
-              <div style={{ width: '24%', background: '#f59e0b' }} />
-              <div style={{ width: '16%', background: '#d1d5db' }} />
-              <div style={{ width: '7%', background: '#e03e3e', borderRadius: '0 999px 999px 0' }} />
-            </div>
-            {/* Legend */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginBottom: 12 }}>
-              {[
-                { color: '#3d9970', label: 'Deposited', amount: 'S$6,200' },
-                { color: '#f59e0b', label: 'Processing', amount: 'S$2,800' },
-                { color: '#d1d5db', label: 'Upcoming', amount: 'S$1,840' },
-                { color: '#e03e3e', label: 'Overdue', amount: 'S$800' },
-              ].map(item => (
-                <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: '#6b7280', flex: 1 }}>{item.label}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#1a1a1a' }}>{item.amount}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ height: 1, background: '#e5e0d8', marginBottom: 12 }} />
-            <div style={{ fontSize: 13, color: '#e03e3e', fontWeight: 500 }}>
-              Overdue 30+ days &nbsp; S$480
-            </div>
-          </div>
-        )}
-
-        {/* This Week */}
-        {show('week') && (
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">This Week</div>
-            </div>
-            <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 16 }}>
-              {daysLeftInWeek()} days left in this week
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
-              {weekItems.map((item, i) => (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '10px 12px', borderRadius: 8, background: '#faf8f4',
-                }}>
-                  <div style={{
-                    fontSize: 11, fontWeight: 700, color: '#f59e0b',
-                    background: '#fef3c7', borderRadius: 6, padding: '3px 8px',
-                    minWidth: 36, textAlign: 'center',
-                  }}>
-                    {item.day}
-                  </div>
-                  <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: '#1a1a1a' }}>{item.title}</div>
-                  <span style={{
-                    fontSize: 11, fontWeight: 500,
-                    background: typeColor[item.type]?.bg || '#f3f4f6',
-                    color: typeColor[item.type]?.color || '#6b7280',
-                    padding: '2px 8px', borderRadius: 20,
-                  }}>
-                    {item.type}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-              <button
-                onClick={() => onNavigate('calendar')}
-                style={{
-                  background: '#fef3c7', border: 'none', borderRadius: 8,
-                  padding: '7px 10px', cursor: 'pointer', color: '#f59e0b',
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  fontSize: 12, fontWeight: 500,
-                }}
-              >
-                <CalendarDays size={15} /> View Calendar
-              </button>
-            </div>
-          </div>
-        )}
+function Panel({ title, subtitle, children }) {
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 12,
+      border: '1px solid #e5e0d8', padding: 18,
+    }}>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a' }}>{title}</div>
+        {subtitle && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{subtitle}</div>}
       </div>
+      {children}
+    </div>
+  );
+}
 
-      {/* Charts Row */}
-      <div className="two-col-grid" style={{ marginBottom: 24 }}>
-        {/* Revenue Chart */}
-        {show('chart') && (
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">Income vs Expenses</div>
-              <span style={{ fontSize: 12, color: '#9ca3af' }}>Last 6 months</span>
-            </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={monthlyData} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false}
-                  tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-                <Tooltip
-                  formatter={(value, name) => [`S$${value.toLocaleString()}`, name === 'income' ? 'Income' : 'Expenses']}
-                  contentStyle={{ borderRadius: 8, border: '1px solid #e5e0d8', fontSize: 13 }}
-                />
-                <Bar dataKey="income" fill="#f59e0b" radius={[4,4,0,0]} />
-                <Bar dataKey="expenses" fill="#e5e0d8" radius={[4,4,0,0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
-        {/* Revenue Target */}
-        {show('target') && (
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">Revenue Target 2026</div>
-              <span style={{ fontSize: 12, color: '#9ca3af' }}>28.5%</span>
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 13, color: '#6b7280' }}>Collected</span>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>S$34,200</span>
-              </div>
-              <div className="progress-bar" style={{ height: 12 }}>
-                <div className="progress-fill" style={{ width: '28.5%' }} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                <span style={{ fontSize: 12, color: '#9ca3af' }}>Target: S$120,000</span>
-                <span style={{ fontSize: 12, color: '#9ca3af' }}>S$85,800 remaining</span>
-              </div>
-            </div>
-
-            {show('deadlines') && (
-              <>
-                <div className="section-divider" style={{ margin: '16px 0' }} />
-                <div className="section-heading" style={{ marginBottom: 12 }}>Upcoming Deadlines</div>
-                {upcomingDeadlines.map((d, i) => (
-                  <div key={i} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '8px 0', borderBottom: i < upcomingDeadlines.length - 1 ? '1px solid #f0ece4' : 'none',
-                  }}>
-                    <span style={{ fontSize: 13, color: '#1a1a1a' }}>{d.project}</span>
-                    <span style={{
-                      fontSize: 12, fontWeight: 500, color: d.color,
-                      background: d.color + '20', padding: '2px 8px', borderRadius: 10,
-                    }}>
-                      {d.days}d
-                    </span>
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Recent Projects */}
-      {show('projects') && (
-        <>
-          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="section-heading" style={{ marginBottom: 0 }}>Recent Projects</div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button className="btn btn-primary btn-sm" onClick={() => setShowNewProject(true)}>
-                <Plus size={14} /> Create Project
-              </button>
-              <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('projects')}>
-                View all <ArrowUpRight size={14} />
-              </button>
-            </div>
-          </div>
-          <div className="table-container" style={{ marginBottom: 24 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Project</th>
-                  <th>Client</th>
-                  <th>Stage</th>
-                  <th>Value</th>
-                  <th>Due</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentProjects.map((p, i) => (
-                  <tr key={i}>
-                    <td style={{ fontWeight: 500 }}>{p.name}</td>
-                    <td style={{ color: '#6b7280' }}>{p.client}</td>
-                    <td>
-                      <span style={{
-                        background: stageBg[p.stage] || '#f3f4f6',
-                        color: stageColor[p.stage] || '#6b7280',
-                        padding: '3px 10px', borderRadius: 20,
-                        fontSize: 12, fontWeight: 500,
-                      }}>
-                        {p.stage}
-                      </span>
-                    </td>
-                    <td style={{ fontWeight: 500 }}>S${p.value.toLocaleString()}</td>
-                    <td style={{ color: '#6b7280', fontSize: 13 }}>{p.due}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-
-      {/* Activity Feed */}
-      {show('activity') && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div className="card-header">
-            <div className="card-title">Activity</div>
-          </div>
-          <button
-            className="btn btn-primary"
-            onClick={() => setShowNewProject(true)}
-            style={{ width: '100%', justifyContent: 'center', marginBottom: 16 }}
-          >
-            <Plus size={16} /> Create new project
-          </button>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {[
-              { text: 'Logged 3.5h on brand guidelines review', time: 'Today, 2:15 PM' },
-              { text: 'Submitted Q2 strategy deck', time: 'Today, 10:00 AM' },
-              { text: 'Invoice #027 sent — S$2,800', time: 'Yesterday, 4:30 PM' },
-            ].map((item, i) => (
-              <div key={i} style={{
-                display: 'flex', alignItems: 'flex-start', gap: 12,
-                padding: '12px 0',
-                borderBottom: i < 2 ? '1px solid #f0ece4' : 'none',
-              }}>
-                <div style={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: '#f59e0b', marginTop: 5, flexShrink: 0,
-                }} />
-                <div style={{ flex: 1, fontSize: 13, color: '#1a1a1a' }}>{item.text}</div>
-                <div style={{ fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap' }}>{item.time}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Flint Brief moved to top of dashboard */}
-
-      {/* Customise Dashboard Modal */}
-      {showCustomise && (
-        <>
-          <div
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100 }}
-            onClick={() => setShowCustomise(false)}
-          />
-          <div style={{
-            position: 'fixed',
-            top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
-            background: '#fff',
-            borderRadius: 16,
-            width: 440,
-            maxHeight: '80vh',
-            zIndex: 101,
-            boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '20px 24px', borderBottom: '1px solid #e5e0d8',
-            }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 16 }}>Customise Dashboard</div>
-                <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>Toggle which cards to show</div>
-              </div>
-              <button className="close-btn" onClick={() => setShowCustomise(false)}><X size={16} /></button>
-            </div>
-            <div style={{ padding: '16px 24px', overflowY: 'auto', flex: 1 }}>
-              {ALL_WIDGETS.map(w => (
-                <div key={w.id} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '12px 0', borderBottom: '1px solid #f0ece4',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <CheckCircle size={15} color={visibleWidgets[w.id] ? '#10b981' : '#d1d5db'} />
-                    <span style={{ fontSize: 14, fontWeight: 500, color: '#1a1a1a' }}>{w.label}</span>
-                  </div>
-                  <label className="toggle">
-                    <input type="checkbox" checked={!!visibleWidgets[w.id]} onChange={() => toggleWidget(w.id)} />
-                    <span className="toggle-slider" />
-                  </label>
-                </div>
-              ))}
-            </div>
-            <div style={{ padding: '16px 24px', borderTop: '1px solid #e5e0d8', textAlign: 'right' }}>
-              <button className="btn btn-primary" onClick={() => setShowCustomise(false)}>Done</button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* New Project Slide Panel */}
-      {showNewProject && (
-        <>
-          <div className="overlay" onClick={() => setShowNewProject(false)} />
-          <div className="slide-panel">
-            <div className="slide-panel-header">
-              <span className="slide-panel-title">New Project</span>
-              <button className="close-btn" onClick={() => setShowNewProject(false)}><X size={16} /></button>
-            </div>
-            <div className="slide-panel-body">
-              <div className="form-group">
-                <label className="form-label">Project Name *</label>
-                <input className="form-input" value={newProject.name} onChange={e => setNewProject(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Brand Refresh – Acme Corp" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Client</label>
-                <input className="form-input" value={newProject.client} onChange={e => setNewProject(p => ({ ...p, client: e.target.value }))} placeholder="Client name" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Stage</label>
-                <select className="form-select" value={newProject.stage} onChange={e => setNewProject(p => ({ ...p, stage: e.target.value }))}>
-                  {['New','Discovery','Proposal','Contract Signed','Kick Off','Onboarding','Planning','Delivery','Completed'].map(s => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Due Date</label>
-                <input className="form-input" type="date" value={newProject.dueDate} onChange={e => setNewProject(p => ({ ...p, dueDate: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Value (SGD)</label>
-                <input className="form-input" type="number" value={newProject.value} onChange={e => setNewProject(p => ({ ...p, value: e.target.value }))} placeholder="0" />
-              </div>
-            </div>
-            <div className="slide-panel-footer">
-              <button className="btn btn-secondary" onClick={() => setShowNewProject(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={() => { setShowNewProject(false); }}>Create Project</button>
-            </div>
-          </div>
-        </>
+function EmptyMini({ icon: Icon, text, cta }) {
+  return (
+    <div style={{
+      padding: '24px 12px', textAlign: 'center',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+    }}>
+      <Icon size={22} color="#cbd5e1" />
+      <div style={{ fontSize: 12, color: '#9ca3af' }}>{text}</div>
+      {cta && (
+        <button
+          onClick={cta.onClick}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 12, fontWeight: 600, color: '#f59e0b',
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+          }}
+        >
+          {cta.label} <ArrowRight size={12} />
+        </button>
       )}
     </div>
   );
