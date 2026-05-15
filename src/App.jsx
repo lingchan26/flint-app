@@ -94,7 +94,7 @@ export default function App() {
   // Logged in — show app
   const renderPage = () => {
     switch (page) {
-      case 'setup':      return <Setup onNavigate={setPage} />;
+      case 'setup':      return <Setup onNavigate={setPage} session={session} />;
       case 'dashboard':  return <Dashboard onNavigate={setPage} session={session} />;
       case 'projects':   return <Projects onNavigate={setPage} />;
       case 'calendar':   return <CalendarView />;
