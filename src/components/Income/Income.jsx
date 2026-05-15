@@ -40,16 +40,6 @@ function rowToExpense(row) {
   };
 }
 
-const monthlyPL = [
-  { month: 'Oct', income: 18200, expenses: 4200 },
-  { month: 'Nov', income: 22400, expenses: 5100 },
-  { month: 'Dec', income: 14800, expenses: 3800 },
-  { month: 'Jan', income: 28600, expenses: 6200 },
-  { month: 'Feb', income: 31200, expenses: 7400 },
-  { month: 'Mar', income: 26800, expenses: 5900 },
-].map(d => ({ ...d, profit: d.income - d.expenses }));
-
-const CLIENTS = ['Internal', 'Lumen Co', 'Vertex Inc', 'Bloom Foods', 'Kova Studio', 'Arko Media', 'Novu Tech'];
 const CATEGORIES = [
   'Advertising & Marketing', 'Bank & Transaction Fees', 'Client Gifts',
   'Commission & Fees', 'Training & Development', 'Gas & Fuel',
@@ -102,6 +92,7 @@ export default function Income({ onNavigate }) {
   const [activeTab, setActiveTab] = useState('Overview');
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [contacts, setContacts] = useState([]);
   const [loadingInv, setLoadingInv] = useState(true);
   const [loadingExp, setLoadingExp] = useState(true);
   const [showNew, setShowNew] = useState(false);
@@ -133,7 +124,7 @@ export default function Income({ onNavigate }) {
   const [plPeriod, setPlPeriod] = useState('This Month');
   const [taxRate, setTaxRate] = useState(22);
 
-  useEffect(() => { fetchInvoices(); fetchExpenses(); }, []);
+  useEffect(() => { fetchInvoices(); fetchExpenses(); fetchContacts(); }, []);
 
   async function fetchInvoices() {
     setLoadingInv(true);
@@ -148,6 +139,67 @@ export default function Income({ onNavigate }) {
     if (!error && data) setExpenses(data.map(rowToExpense));
     setLoadingExp(false);
   }
+
+  async function fetchContacts() {
+    const { data, error } = await supabase.from('contacts').select('name, company').eq('archived', false);
+    if (!error && data) setContacts(data);
+  }
+
+  // Build the client dropdown list dynamically: "Internal" + contacts + any client names
+  // already used in invoices or expenses (handles legacy/imported data).
+  const CLIENTS = useMemo(() => {
+    const set = new Set(['Internal']);
+    contacts.forEach(c => {
+      if (c.company) set.add(c.company);
+      else if (c.name) set.add(c.name);
+    });
+    invoices.forEach(i => { if (i.client) set.add(i.client); });
+    expenses.forEach(e => { if (e.client) set.add(e.client); });
+    return Array.from(set);
+  }, [contacts, invoices, expenses]);
+
+  // Build the P&L chart data from real invoices + expenses, last 6 months.
+  // Income = sum of invoices marked Paid in that month (by paid_at, fall back to created_at).
+  // Expenses = sum of expenses in that month (by date).
+  const monthlyPL = useMemo(() => {
+    const now = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({
+        key: `${d.getFullYear()}-${d.getMonth()}`,
+        label: d.toLocaleString('en-SG', { month: 'short' }),
+        start: d,
+        end: new Date(d.getFullYear(), d.getMonth() + 1, 1),
+        income: 0,
+        expenses: 0,
+      });
+    }
+    invoices.forEach(inv => {
+      if (inv.status !== 'Paid') return;
+      const ref = inv.dueRaw ? new Date(inv.dueRaw) : null;
+      if (!ref) return;
+      const m = months.find(x => ref >= x.start && ref < x.end);
+      if (m) m.income += Number(inv.amount) || 0;
+    });
+    expenses.forEach(exp => {
+      if (!exp.dateRaw) return;
+      const ref = new Date(exp.dateRaw);
+      const m = months.find(x => ref >= x.start && ref < x.end);
+      if (m) m.expenses += Number(exp.amount) || 0;
+    });
+    return months.map(m => ({
+      month: m.label,
+      income: m.income,
+      expenses: m.expenses,
+      profit: m.income - m.expenses,
+    }));
+  }, [invoices, expenses]);
+
+  const hasPLData = useMemo(
+    () => monthlyPL.some(m => m.income > 0 || m.expenses > 0),
+    [monthlyPL]
+  );
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -269,8 +321,8 @@ export default function Income({ onNavigate }) {
   const totalIncome = monthlyPL.reduce((s, d) => s + d.income, 0);
   const totalExpensesPL = monthlyPL.reduce((s, d) => s + d.expenses, 0);
   const netProfit = totalIncome - totalExpensesPL;
-  const profitMargin = ((netProfit / totalIncome) * 100).toFixed(1);
-  const taxReserve = Math.round(34200 * (taxRate / 100));
+  const profitMargin = totalIncome > 0 ? ((netProfit / totalIncome) * 100).toFixed(1) : '0.0';
+  const taxReserve = Math.round(totalIncome * (taxRate / 100));
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
 
   return (
@@ -410,6 +462,15 @@ export default function Income({ onNavigate }) {
               <div className="card-title">Monthly P&L</div>
               <span style={{ fontSize: 12, color: '#9ca3af' }}>Last 6 months</span>
             </div>
+            {!hasPLData ? (
+              <div style={{
+                padding: '40px 20px', textAlign: 'center',
+                color: '#9ca3af', fontSize: 13,
+              }}>
+                No income or expenses recorded yet. Once you mark an invoice as paid or log
+                an expense, the chart will populate here.
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height={220}>
               <ComposedChart data={monthlyPL} barGap={4}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" vertical={false} />
@@ -425,6 +486,8 @@ export default function Income({ onNavigate }) {
                 <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="profit" />
               </ComposedChart>
             </ResponsiveContainer>
+            )}
+            {hasPLData && (
             <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
               {[
                 { color: '#f59e0b', label: 'Income' },
@@ -436,6 +499,7 @@ export default function Income({ onNavigate }) {
                 </span>
               ))}
             </div>
+            )}
           </div>
         </>
       )}
@@ -716,6 +780,16 @@ export default function Income({ onNavigate }) {
               <div className="card-title">Income vs Expenses vs Profit</div>
               <span style={{ fontSize: 12, color: '#9ca3af' }}>Last 6 months</span>
             </div>
+            {!hasPLData ? (
+              <div style={{
+                padding: '40px 20px', textAlign: 'center',
+                color: '#9ca3af', fontSize: 13,
+              }}>
+                No income or expenses recorded yet. Mark an invoice as paid or log an
+                expense to see this chart populate.
+              </div>
+            ) : (
+              <>
             <ResponsiveContainer width="100%" height={260}>
               <ComposedChart data={monthlyPL} barGap={4}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" vertical={false} />
@@ -742,6 +816,8 @@ export default function Income({ onNavigate }) {
                 </span>
               ))}
             </div>
+              </>
+            )}
           </div>
 
           {/* Tax Pocket */}
