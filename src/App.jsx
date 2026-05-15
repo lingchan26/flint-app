@@ -22,14 +22,14 @@ import Autopilot from './components/Autopilot/Autopilot';
 import RadarPage from './components/Radar/RadarPage';
 import { Zap } from 'lucide-react';
 import {
-  LayoutDashboard, FolderKanban, Calendar, BarChart3, BookUser,
+  LayoutDashboard, FolderKanban, Calendar, DollarSign, BookUser,
 } from 'lucide-react';
 
 const mobileNav = [
   { id: 'dashboard', icon: LayoutDashboard },
   { id: 'projects', icon: FolderKanban },
   { id: 'calendar', icon: Calendar },
-  { id: 'finance', icon: BarChart3 },
+  { id: 'income', icon: DollarSign },
   { id: 'contacts', icon: BookUser },
 ];
 
@@ -95,7 +95,7 @@ export default function App() {
   const renderPage = () => {
     switch (page) {
       case 'setup':      return <Setup onNavigate={setPage} />;
-      case 'dashboard':  return <Dashboard onNavigate={setPage} />;
+      case 'dashboard':  return <Dashboard onNavigate={setPage} session={session} />;
       case 'projects':   return <Projects onNavigate={setPage} />;
       case 'calendar':   return <CalendarView />;
       case 'income':     return <Income onNavigate={setPage} />;
