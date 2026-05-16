@@ -7,7 +7,6 @@ import Dashboard from './components/Dashboard/Dashboard';
 import Projects from './components/Projects/Projects';
 import CalendarView from './components/Calendar/CalendarView';
 import Income from './components/Income/Income';
-import Clients from './components/Clients/Clients';
 import Services from './components/Services/Services';
 import Finance from './components/Finance/Finance';
 import Reports from './components/Reports/Reports';
