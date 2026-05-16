@@ -106,7 +106,7 @@ export default function App() {
       case 'reports':    return <Reports />;
       case 'contacts':   return <Contacts />;
       case 'lead-forms': return <LeadForms />;
-      case 'portfolio':  return <Portfolio />;
+      case 'portfolio':  return <Portfolio session={session} />;
       case 'files':      return <FilesTemplates />;
       case 'pricing':    return <Pricing />;
       case 'autopilot':  return <Autopilot />;
