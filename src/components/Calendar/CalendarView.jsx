@@ -1,5 +1,9 @@
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X, CheckCircle, Mail, Circle, Trash2, CalendarDays, CheckSquare } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import {
+  ChevronLeft, ChevronRight, Plus, X, CheckCircle, Mail, Circle,
+  Trash2, CalendarDays, CheckSquare, Loader, AlertCircle,
+} from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 const HOLIDAYS = {
   Singapore: [
@@ -39,51 +43,165 @@ const EVENT_COLORS = [
   '#ec4899', '#6b7280',
 ];
 
-const INITIAL_EVENTS = [
-  { id: 1, date: '2026-04-07', name: 'Brand Refresh Kickoff', type: 'Booked Project', color: '#f59e0b' },
-  { id: 2, date: '2026-04-10', name: 'Client Meeting – Vertex', type: 'Meeting', color: '#3b82f6' },
-  { id: 3, date: '2026-04-15', name: 'Invoice Due – Bloom Foods', type: 'Invoice Due', color: '#ef4444' },
-  { id: 4, date: '2026-04-18', name: 'Novu Tech Discovery Call', type: 'Meeting', color: '#3b82f6' },
-  { id: 5, date: '2026-04-22', name: 'Social Media Kit Delivery', type: 'Booked Project', color: '#f59e0b' },
-  { id: 6, date: '2026-04-25', name: 'Tentative: Arko Campaign', type: 'Tentative', color: '#9ca3af' },
-  { id: 7, date: '2026-04-28', name: 'Invoice Due – Kova Studio', type: 'Invoice Due', color: '#ef4444' },
-];
-
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-const INITIAL_TASKS = [
-  { id: 1, title: 'Send proposal to Novu Tech', project: 'Website Redesign', dueDate: '2026-05-12', dueTime: '10:00', done: false },
-  { id: 2, title: 'Follow up with Bloom Foods on packaging approval', project: 'Packaging Design', dueDate: '2026-05-14', dueTime: '14:00', done: false },
-  { id: 3, title: 'Review Annual Report draft from Vertex Inc', project: 'Annual Report', dueDate: '2026-05-16', dueTime: '', done: false },
-];
+function rowToEvent(r) {
+  return {
+    id: r.id,
+    date: r.event_date,
+    name: r.session_name,
+    type: r.event_category || 'Meeting',
+    sessionType: r.session_type || 'Video call',
+    timezone: r.timezone || 'Asia/Singapore',
+    duration: r.duration || '60',
+    color: r.color || '#f59e0b',
+    notes: r.notes || '',
+    emailClient: !!r.email_client,
+  };
+}
+
+function rowToTask(r) {
+  return {
+    id: r.id,
+    title: r.title,
+    project: r.project || '',
+    dueDate: r.due_date || '',
+    dueTime: r.due_time ? r.due_time.slice(0, 5) : '',
+    reminder: r.reminder || 'At due time',
+    done: !!r.done,
+  };
+}
+
+/* ─── Tasks subcomponent ───────────────────────────────────────────────── */
 
 function TaskView() {
-  const [tasks, setTasks] = useState(INITIAL_TASKS);
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ title: '', project: '', dueDate: new Date().toISOString().split('T')[0], dueTime: '', reminder: 'At due time' });
+  const [form, setForm] = useState({
+    title: '', project: '',
+    dueDate: new Date().toISOString().split('T')[0],
+    dueTime: '', reminder: 'At due time',
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('*')
+          .order('due_date', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: false });
+        if (cancelled) return;
+        if (error) throw error;
+        setTasks((data || []).map(rowToTask));
+      } catch (e) {
+        if (!cancelled) setError(e.message || 'Could not load tasks');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
   const open = tasks.filter(t => !t.done);
   const done = tasks.filter(t => t.done);
 
-  const toggleDone = (id) => setTasks(t => t.map(task => task.id === id ? { ...task, done: !task.done } : task));
-  const deleteTask = (id) => setTasks(t => t.filter(task => task.id !== id));
-  const addTask = () => {
-    if (!form.title) return;
-    setTasks(t => [...t, { id: Date.now(), ...form, done: false }]);
-    setForm({ title: '', project: '', dueDate: new Date().toISOString().split('T')[0], dueTime: '', reminder: 'At due time' });
-    setShowAdd(false);
-  };
+  async function toggleDone(id, currentDone) {
+    setTasks(t => t.map(task => task.id === id ? { ...task, done: !currentDone } : task)); // optimistic
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ done: !currentDone, done_at: !currentDone ? new Date().toISOString() : null })
+        .eq('id', id);
+      if (error) throw error;
+    } catch (e) {
+      setTasks(t => t.map(task => task.id === id ? { ...task, done: currentDone } : task)); // rollback
+      setError(e.message || 'Could not update task');
+    }
+  }
 
-  const isOverdue = (t) => !t.done && t.dueDate && new Date(t.dueDate) < new Date() && new Date(t.dueDate).toDateString() !== new Date().toDateString();
+  async function deleteTask(id) {
+    if (!confirm('Delete this task?')) return;
+    try {
+      const { error } = await supabase.from('tasks').delete().eq('id', id);
+      if (error) throw error;
+      setTasks(t => t.filter(task => task.id !== id));
+    } catch (e) {
+      setError(e.message || 'Could not delete task');
+    }
+  }
+
+  async function addTask() {
+    if (!form.title.trim()) return;
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not signed in');
+      const payload = {
+        user_id: user.id,
+        title: form.title.trim(),
+        project: form.project.trim() || null,
+        due_date: form.dueDate || null,
+        due_time: form.dueTime ? `${form.dueTime}:00` : null,
+        reminder: form.reminder,
+        done: false,
+      };
+      const { data, error } = await supabase.from('tasks').insert(payload).select().single();
+      if (error) throw error;
+      setTasks(t => [rowToTask(data), ...t]);
+      setForm({
+        title: '', project: '',
+        dueDate: new Date().toISOString().split('T')[0],
+        dueTime: '', reminder: 'At due time',
+      });
+      setShowAdd(false);
+    } catch (e) {
+      setError(e.message || 'Could not add task');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const isOverdue = (t) => !t.done && t.dueDate && new Date(t.dueDate) < new Date()
+    && new Date(t.dueDate).toDateString() !== new Date().toDateString();
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+        <Loader size={24} color="var(--slate-400)" style={{ animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   return (
     <div>
-      {/* Header */}
+      {error && (
+        <div style={{
+          background: '#fef2f2', border: '1px solid #fecaca',
+          borderRadius: 10, padding: 14, marginBottom: 16,
+          display: 'flex', gap: 10, alignItems: 'flex-start',
+        }}>
+          <AlertCircle size={18} color="#991b1b" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1, fontSize: 13, color: '#7f1d1d' }}>{error}</div>
+          <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7f1d1d' }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--slate-900)' }}>Task Management</div>
-          <div style={{ fontSize: 13, color: 'var(--slate-400)', marginTop: 2 }}>View and track tasks you created or were assigned</div>
+          <div style={{ fontSize: 13, color: 'var(--slate-400)', marginTop: 2 }}>View and track your tasks</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{
@@ -96,7 +214,6 @@ function TaskView() {
         </div>
       </div>
 
-      {/* Task list */}
       <div className="table-container" style={{ marginBottom: 24 }}>
         <table>
           <thead>
@@ -113,7 +230,9 @@ function TaskView() {
             {open.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--slate-400)' }}>
-                  No open tasks — you're all caught up! 🎉
+                  {tasks.length === 0
+                    ? 'No tasks yet — click "Add task" to create your first one.'
+                    : "No open tasks — you're all caught up! 🎉"}
                 </td>
               </tr>
             ) : open.map(task => {
@@ -121,7 +240,7 @@ function TaskView() {
               return (
                 <tr key={task.id}>
                   <td>
-                    <button onClick={() => toggleDone(task.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, color: 'var(--slate-300)' }}>
+                    <button onClick={() => toggleDone(task.id, task.done)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, color: 'var(--slate-300)' }}>
                       <Circle size={18} />
                     </button>
                   </td>
@@ -139,11 +258,7 @@ function TaskView() {
                     )}
                   </td>
                   <td style={{ color: 'var(--slate-500)', fontSize: 13 }}>
-                    {task.dueTime ? (
-                      <button className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}>{task.dueTime}</button>
-                    ) : (
-                      <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: 'var(--slate-400)' }}>Select</button>
-                    )}
+                    {task.dueTime || <span style={{ color: 'var(--slate-300)' }}>—</span>}
                   </td>
                   <td style={{ color: 'var(--slate-500)', fontSize: 13 }}>{task.project || <span style={{ color: 'var(--slate-300)' }}>No project</span>}</td>
                   <td>
@@ -158,7 +273,6 @@ function TaskView() {
         </table>
       </div>
 
-      {/* Completed tasks */}
       {done.length > 0 && (
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--slate-400)', marginBottom: 10 }}>Completed ({done.length})</div>
@@ -168,7 +282,7 @@ function TaskView() {
                 {done.map(task => (
                   <tr key={task.id} style={{ opacity: 0.5 }}>
                     <td style={{ width: 40 }}>
-                      <button onClick={() => toggleDone(task.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, color: 'var(--success)' }}>
+                      <button onClick={() => toggleDone(task.id, task.done)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, color: 'var(--success)' }}>
                         <CheckCircle size={18} />
                       </button>
                     </td>
@@ -189,14 +303,13 @@ function TaskView() {
         </div>
       )}
 
-      {/* Add task modal */}
       {showAdd && (
         <>
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 100 }} onClick={() => setShowAdd(false)} />
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 100 }} onClick={() => !saving && setShowAdd(false)} />
           <div style={{
             position: 'fixed', top: '50%', left: '50%',
             transform: 'translate(-50%, -50%)',
-            background: '#fff', borderRadius: 16, width: 420,
+            background: '#fff', borderRadius: 16, width: 420, maxWidth: '95vw',
             boxShadow: '0 20px 60px rgba(0,0,0,0.2)', zIndex: 101,
             overflow: 'hidden',
           }}>
@@ -217,7 +330,7 @@ function TaskView() {
               </div>
               <div className="form-group">
                 <label className="form-label">Project</label>
-                <input className="form-input" value={form.project} onChange={e => setForm(f => ({ ...f, project: e.target.value }))} placeholder="Search for a project" />
+                <input className="form-input" value={form.project} onChange={e => setForm(f => ({ ...f, project: e.target.value }))} placeholder="Related project (optional)" />
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <div className="form-group" style={{ flex: 1 }}>
@@ -234,11 +347,18 @@ function TaskView() {
                 <select className="form-select" value={form.reminder} onChange={e => setForm(f => ({ ...f, reminder: e.target.value }))}>
                   {['At due time', '15 min before', '1 hour before', '1 day before'].map(r => <option key={r}>{r}</option>)}
                 </select>
-                <div style={{ fontSize: 11, color: 'var(--slate-400)', marginTop: 4 }}>Reminders will only be sent to the assignee.</div>
+                <div style={{ fontSize: 11, color: 'var(--slate-400)', marginTop: 4 }}>Reminders are saved with the task.</div>
               </div>
             </div>
             <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={addTask} style={{ padding: '10px 24px', fontSize: 15, fontWeight: 700 }}>Create task</button>
+              <button
+                className="btn btn-primary"
+                onClick={addTask}
+                disabled={saving || !form.title.trim()}
+                style={{ padding: '10px 24px', fontSize: 15, fontWeight: 700 }}
+              >
+                {saving ? 'Saving…' : 'Create task'}
+              </button>
             </div>
           </div>
         </>
@@ -247,20 +367,48 @@ function TaskView() {
   );
 }
 
+/* ─── Main calendar ──────────────────────────────────────────────────── */
+
 export default function CalendarView() {
   const today = new Date();
-  const [mainView, setMainView] = useState('calendar'); // 'calendar' | 'tasks'
-  const [viewDate, setViewDate] = useState(new Date(2026, 3, 1)); // April 2026
+  const [mainView, setMainView] = useState('calendar');
+  const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [viewMode, setViewMode] = useState('month');
-  const [events, setEvents] = useState(INITIAL_EVENTS);
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState('Singapore');
   const [showForm, setShowForm] = useState(false);
-  const [formDate, setFormDate] = useState('');
+  const [editingEvent, setEditingEvent] = useState(null);
   const [form, setForm] = useState({
-    name: '', type: 'Booked Project', timezone: 'SGT',
+    name: '', type: 'Booked Project', sessionType: 'Video call', timezone: 'Asia/Singapore',
     duration: '60', date: '', color: '#f59e0b', notes: '', emailClient: false,
   });
   const [toast, setToast] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .from('calendar_events')
+          .select('*')
+          .order('event_date', { ascending: true });
+        if (cancelled) return;
+        if (error) throw error;
+        setEvents((data || []).map(rowToEvent));
+      } catch (e) {
+        if (!cancelled) setError(e.message || 'Could not load calendar');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -278,31 +426,109 @@ export default function CalendarView() {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
   const dateStr = (d) => `${year}-${String(month + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const getEvents = (d) => events.filter(e => e.date === dateStr(d));
+  const getHolidays = (d) => (HOLIDAYS[selectedCountry] || []).filter(h => h.date === dateStr(d));
 
-  const getEvents = (d) => {
-    const ds = dateStr(d);
-    return events.filter(e => e.date === ds);
+  const openNewEventModal = (ds) => {
+    setEditingEvent(null);
+    setFormFresh(ds);
+    setShowForm(true);
   };
 
-  const getHolidays = (d) => {
-    const ds = dateStr(d);
-    return (HOLIDAYS[selectedCountry] || []).filter(h => h.date === ds);
+  const openEditEventModal = (ev) => {
+    setEditingEvent(ev);
+    setForm({
+      name: ev.name,
+      type: ev.type,
+      sessionType: ev.sessionType,
+      timezone: ev.timezone,
+      duration: ev.duration,
+      date: ev.date,
+      color: ev.color,
+      notes: ev.notes,
+      emailClient: ev.emailClient,
+    });
+    setShowForm(true);
+  };
+
+  const setFormFresh = (ds) => {
+    setForm({
+      name: '', type: 'Booked Project', sessionType: 'Video call',
+      timezone: 'Asia/Singapore', duration: '60',
+      date: ds || new Date().toISOString().split('T')[0],
+      color: '#f59e0b', notes: '', emailClient: false,
+    });
   };
 
   const handleDblClick = (d) => {
     if (!d) return;
-    const ds = dateStr(d);
-    setFormDate(ds);
-    setForm(f => ({ ...f, date: ds }));
-    setShowForm(true);
+    openNewEventModal(dateStr(d));
   };
 
-  const saveEvent = () => {
-    if (!form.name) return;
-    setEvents(e => [...e, { id: Date.now(), date: form.date, name: form.name, type: form.type, color: form.color }]);
+  async function saveEvent() {
+    if (!form.name.trim() || !form.date) return;
+    setSaving(true);
+    try {
+      const payload = {
+        session_name: form.name.trim(),
+        session_type: form.sessionType,
+        event_category: form.type,
+        timezone: form.timezone,
+        duration: form.duration,
+        event_date: form.date,
+        color: form.color,
+        notes: form.notes?.trim() || null,
+        email_client: form.emailClient,
+      };
+
+      if (editingEvent) {
+        const { data, error } = await supabase
+          .from('calendar_events')
+          .update(payload)
+          .eq('id', editingEvent.id)
+          .select()
+          .single();
+        if (error) throw error;
+        setEvents(es => es.map(e => e.id === editingEvent.id ? rowToEvent(data) : e));
+        showToast('Session updated');
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not signed in');
+        const { data, error } = await supabase
+          .from('calendar_events')
+          .insert({ ...payload, user_id: user.id })
+          .select()
+          .single();
+        if (error) throw error;
+        setEvents(es => [...es, rowToEvent(data)]);
+        showToast('Session created');
+      }
+      closeForm();
+    } catch (e) {
+      setError(e.message || 'Could not save session');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteEvent() {
+    if (!editingEvent) return;
+    if (!confirm('Delete this session?')) return;
+    try {
+      const { error } = await supabase.from('calendar_events').delete().eq('id', editingEvent.id);
+      if (error) throw error;
+      setEvents(es => es.filter(e => e.id !== editingEvent.id));
+      closeForm();
+      showToast('Session deleted');
+    } catch (e) {
+      setError(e.message || 'Could not delete session');
+    }
+  }
+
+  const closeForm = () => {
     setShowForm(false);
-    setForm({ name: '', type: 'Booked Project', timezone: 'SGT', duration: '60', date: '', color: '#f59e0b', notes: '', emailClient: false });
-    showToast('Session created!');
+    setEditingEvent(null);
+    setFormFresh('');
   };
 
   const isToday = (d) => {
@@ -311,9 +537,8 @@ export default function CalendarView() {
     return d === t.getDate() && month === t.getMonth() && year === t.getFullYear();
   };
 
-  // Yearly view
   const renderYearly = () => (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
       {Array.from({ length: 12 }, (_, mi) => {
         const mFirst = new Date(year, mi, 1).getDay();
         const mDays = new Date(year, mi + 1, 0).getDate();
@@ -354,8 +579,7 @@ export default function CalendarView() {
   return (
     <div className="page-content">
       <div className="page-header">
-        {/* Left: title + main tab switcher */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <h1 className="page-title" style={{ margin: 0 }}>
             {mainView === 'tasks' ? 'Tasks' : 'Calendar'}
           </h1>
@@ -377,7 +601,6 @@ export default function CalendarView() {
           </div>
         </div>
 
-        {/* Right: calendar-only controls */}
         {mainView === 'calendar' && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <select
@@ -386,12 +609,7 @@ export default function CalendarView() {
               value={selectedCountry}
               onChange={e => setSelectedCountry(e.target.value)}
             >
-              <option>Singapore</option>
-              <option>Australia</option>
-              <option>Malaysia</option>
-              <option>Vietnam</option>
-              <option>Thailand</option>
-              <option>United Kingdom</option>
+              {Object.keys(HOLIDAYS).map(c => <option key={c}>{c}</option>)}
             </select>
 
             <div className="tabs" style={{ margin: 0 }}>
@@ -400,194 +618,208 @@ export default function CalendarView() {
             </div>
 
             <button className="btn btn-secondary btn-sm" onClick={goToday}>Today</button>
+            <button className="btn btn-primary btn-sm" onClick={() => openNewEventModal(dateStr(today.getDate()))}>
+              <Plus size={14} /> New session
+            </button>
           </div>
         )}
       </div>
 
-      {/* ── Tasks view ── */}
+      {error && (
+        <div style={{
+          background: '#fef2f2', border: '1px solid #fecaca',
+          borderRadius: 10, padding: 14, marginBottom: 16,
+          display: 'flex', gap: 10, alignItems: 'flex-start',
+        }}>
+          <AlertCircle size={18} color="#991b1b" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1, fontSize: 13, color: '#7f1d1d' }}>{error}</div>
+          <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7f1d1d' }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {mainView === 'tasks' && <TaskView />}
 
-      {/* ── Calendar view ── */}
       {mainView === 'calendar' && (
         <>
-          {/* Navigation */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-            <button className="btn btn-ghost btn-sm" onClick={prevMonth}><ChevronLeft size={18} /></button>
-            <h2 style={{ fontSize: 20, fontWeight: 700, minWidth: 200, textAlign: 'center' }}>
-              {MONTHS[month]} {year}
-            </h2>
-            <button className="btn btn-ghost btn-sm" onClick={nextMonth}><ChevronRight size={18} /></button>
-          </div>
-
-          {/* Legend */}
-          <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-            {[
-              { label: 'Booked Projects', color: '#f59e0b' },
-              { label: 'Meetings', color: '#3b82f6' },
-              { label: 'Invoice Due', color: '#ef4444' },
-              { label: 'Tentative', color: '#9ca3af', dashed: true },
-            ].map(l => (
-              <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b7280' }}>
-                <div style={{
-                  width: 12, height: 12, borderRadius: 3, background: l.color,
-                  border: l.dashed ? '2px dashed #9ca3af' : 'none',
-                  boxSizing: 'border-box',
-                }} />
-                {l.label}
-              </div>
-            ))}
-            <div style={{ marginLeft: 8, fontSize: 12, color: '#9ca3af' }}>Double-click a date to add a session</div>
-            {/* Calendar source buttons */}
-            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
-              {[
-                { label: 'Google', color: '#4285F4' },
-                { label: 'Apple', color: '#1a1a1a' },
-              ].map(cal => (
-                <button key={cal.label} style={{
-                  background: '#fff', border: '1px solid #e5e0d8', borderRadius: 8,
-                  padding: '4px 12px', fontSize: 12, fontWeight: 500,
-                  color: cal.color, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-                }}>
-                  {cal.label}
-                </button>
-              ))}
-              <button style={{
-                background: '#fff', border: '1px solid #e5e0d8', borderRadius: 8,
-                padding: '4px 12px', fontSize: 12, fontWeight: 500,
-                color: '#0078D4', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-              }}>
-                <Mail size={12} color="#0078D4" /> Outlook
-              </button>
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+              <Loader size={28} color="var(--slate-400)" style={{ animation: 'spin 1s linear infinite' }} />
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
-          </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                <button className="btn btn-ghost btn-sm" onClick={prevMonth}><ChevronLeft size={18} /></button>
+                <h2 style={{ fontSize: 20, fontWeight: 700, minWidth: 200, textAlign: 'center' }}>
+                  {MONTHS[month]} {year}
+                </h2>
+                <button className="btn btn-ghost btn-sm" onClick={nextMonth}><ChevronRight size={18} /></button>
+              </div>
 
-          {viewMode === 'year' ? renderYearly() : (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              {/* Day headers */}
-              <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-                background: '#faf8f4', borderBottom: '1px solid #e5e0d8',
-              }}>
-                {DAYS.map(d => (
-                  <div key={d} style={{
-                    padding: '10px 0', textAlign: 'center',
-                    fontSize: 12, fontWeight: 600, color: '#9ca3af',
-                    textTransform: 'uppercase', letterSpacing: '0.5px',
-                  }}>
-                    {d}
+              <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                {[
+                  { label: 'Booked Projects', color: '#f59e0b' },
+                  { label: 'Meetings', color: '#3b82f6' },
+                  { label: 'Invoice Due', color: '#ef4444' },
+                  { label: 'Tentative', color: '#9ca3af', dashed: true },
+                ].map(l => (
+                  <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b7280' }}>
+                    <div style={{
+                      width: 12, height: 12, borderRadius: 3, background: l.color,
+                      border: l.dashed ? '2px dashed #9ca3af' : 'none',
+                      boxSizing: 'border-box',
+                    }} />
+                    {l.label}
                   </div>
                 ))}
+                <div style={{ marginLeft: 8, fontSize: 12, color: '#9ca3af' }}>
+                  Double-click a date to add a session
+                </div>
               </div>
 
-              {/* Cells */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
-                {cells.map((d, i) => {
-                  const dayEvents = d ? getEvents(d) : [];
-                  const holidays = d ? getHolidays(d) : [];
-                  return (
-                    <div
-                      key={i}
-                      onDoubleClick={() => handleDblClick(d)}
-                      style={{
-                        minHeight: 100,
-                        border: '1px solid #f0ece4',
-                        padding: '6px 8px',
-                        cursor: d ? 'pointer' : 'default',
-                        background: d ? '#fff' : '#faf8f4',
-                        transition: 'background 0.1s',
-                      }}
-                      onMouseEnter={e => { if (d) e.currentTarget.style.background = '#fffbeb'; }}
-                      onMouseLeave={e => { if (d) e.currentTarget.style.background = '#fff'; }}
-                    >
-                      {d && (
-                        <>
-                          <div style={{
-                            width: 28, height: 28, borderRadius: '50%',
-                            background: isToday(d) ? '#f59e0b' : 'transparent',
-                            color: isToday(d) ? '#fff' : '#1a1a1a',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 13, fontWeight: isToday(d) ? 700 : 400,
-                            marginBottom: 4,
-                          }}>
-                            {d}
-                          </div>
+              {viewMode === 'year' ? renderYearly() : (
+                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+                    background: '#faf8f4', borderBottom: '1px solid #e5e0d8',
+                  }}>
+                    {DAYS.map(d => (
+                      <div key={d} style={{
+                        padding: '10px 0', textAlign: 'center',
+                        fontSize: 12, fontWeight: 600, color: '#9ca3af',
+                        textTransform: 'uppercase', letterSpacing: '0.5px',
+                      }}>
+                        {d}
+                      </div>
+                    ))}
+                  </div>
 
-                          {holidays.map((h, hi) => (
-                            <div key={hi} style={{
-                              fontSize: 10, color: '#ef4444', fontWeight: 500,
-                              marginBottom: 2, lineHeight: 1.3,
-                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            }}>
-                              🗓 {h.name}
-                            </div>
-                          ))}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+                    {cells.map((d, i) => {
+                      const dayEvents = d ? getEvents(d) : [];
+                      const holidays = d ? getHolidays(d) : [];
+                      return (
+                        <div
+                          key={i}
+                          onDoubleClick={() => handleDblClick(d)}
+                          style={{
+                            minHeight: 100,
+                            border: '1px solid #f0ece4',
+                            padding: '6px 8px',
+                            cursor: d ? 'pointer' : 'default',
+                            background: d ? '#fff' : '#faf8f4',
+                            transition: 'background 0.1s',
+                          }}
+                          onMouseEnter={e => { if (d) e.currentTarget.style.background = '#fffbeb'; }}
+                          onMouseLeave={e => { if (d) e.currentTarget.style.background = '#fff'; }}
+                        >
+                          {d && (
+                            <>
+                              <div style={{
+                                width: 28, height: 28, borderRadius: '50%',
+                                background: isToday(d) ? '#f59e0b' : 'transparent',
+                                color: isToday(d) ? '#fff' : '#1a1a1a',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 13, fontWeight: isToday(d) ? 700 : 400,
+                                marginBottom: 4,
+                              }}>
+                                {d}
+                              </div>
 
-                          {dayEvents.slice(0, 3).map((ev, ei) => (
-                            <div key={ei} style={{
-                              background: ev.color + '22',
-                              borderLeft: `3px solid ${ev.color}`,
-                              borderRadius: '0 4px 4px 0',
-                              padding: '2px 6px',
-                              marginBottom: 2,
-                              fontSize: 11,
-                              color: '#1a1a1a',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              borderStyle: ev.type === 'Tentative' ? 'dashed' : 'solid',
-                            }}>
-                              {ev.name}
-                            </div>
-                          ))}
-                          {dayEvents.length > 3 && (
-                            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>+{dayEvents.length - 3} more</div>
+                              {holidays.map((h, hi) => (
+                                <div key={hi} style={{
+                                  fontSize: 10, color: '#ef4444', fontWeight: 500,
+                                  marginBottom: 2, lineHeight: 1.3,
+                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                }}>
+                                  🗓 {h.name}
+                                </div>
+                              ))}
+
+                              {dayEvents.slice(0, 3).map((ev, ei) => (
+                                <div
+                                  key={ei}
+                                  onClick={(e) => { e.stopPropagation(); openEditEventModal(ev); }}
+                                  style={{
+                                    background: ev.color + '22',
+                                    borderLeft: `3px solid ${ev.color}`,
+                                    borderRadius: '0 4px 4px 0',
+                                    padding: '2px 6px',
+                                    marginBottom: 2,
+                                    fontSize: 11,
+                                    color: '#1a1a1a',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    borderStyle: ev.type === 'Tentative' ? 'dashed' : 'solid',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {ev.name}
+                                </div>
+                              ))}
+                              {dayEvents.length > 3 && (
+                                <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>+{dayEvents.length - 3} more</div>
+                              )}
+                            </>
                           )}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </>
       )}
 
-      {/* Session Form Panel */}
       {showForm && (
         <>
-          <div className="overlay" onClick={() => setShowForm(false)} />
+          <div className="overlay" onClick={() => !saving && closeForm()} />
           <div className="slide-panel">
             <div className="slide-panel-header">
-              <span className="slide-panel-title">New Session</span>
-              <button className="close-btn" onClick={() => setShowForm(false)}><X size={16} /></button>
+              <span className="slide-panel-title">
+                {editingEvent ? 'Edit Session' : 'New Session'}
+              </span>
+              <button className="close-btn" onClick={closeForm}><X size={16} /></button>
             </div>
             <div className="slide-panel-body">
               <div className="form-group">
-                <label className="form-label">Session Name</label>
+                <label className="form-label">Session Name *</label>
                 <input className="form-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Discovery Call with Acme" />
               </div>
               <div className="form-group">
-                <label className="form-label">Session Type</label>
+                <label className="form-label">Category</label>
                 <select className="form-select" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
                   <option value="Booked Project">Booked Project</option>
-                  <option value="Meeting">In-person Meeting</option>
-                  <option value="Meeting">Video Call</option>
-                  <option value="Meeting">Phone Call</option>
+                  <option value="Meeting">Meeting</option>
                   <option value="Invoice Due">Invoice Due</option>
                   <option value="Tentative">Tentative</option>
-                  <option value="Others">Others</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Session Type</label>
+                <select className="form-select" value={form.sessionType} onChange={e => setForm(f => ({ ...f, sessionType: e.target.value }))}>
+                  <option>Video call</option>
+                  <option>Phone call</option>
+                  <option>In-person</option>
+                  <option>Email</option>
+                  <option>Other</option>
                 </select>
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Timezone</label>
                   <select className="form-select" value={form.timezone} onChange={e => setForm(f => ({ ...f, timezone: e.target.value }))}>
-                    <option value="SGT">SGT (UTC+8)</option>
-                    <option value="AEST">AEST (UTC+10)</option>
-                    <option value="MYT">MYT (UTC+8)</option>
-                    <option value="GMT">GMT (UTC+0)</option>
-                    <option value="ICT">ICT (UTC+7)</option>
+                    <option value="Asia/Singapore">SGT (Singapore)</option>
+                    <option value="Australia/Sydney">AEST (Sydney)</option>
+                    <option value="Asia/Kuala_Lumpur">MYT (KL)</option>
+                    <option value="Europe/London">GMT (London)</option>
+                    <option value="Asia/Bangkok">ICT (Bangkok)</option>
                     <option value="UTC">UTC</option>
                   </select>
                 </div>
@@ -597,7 +829,7 @@ export default function CalendarView() {
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">Date</label>
+                <label className="form-label">Date *</label>
                 <input className="form-input" type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
               </div>
               <div className="form-group">
@@ -625,9 +857,27 @@ export default function CalendarView() {
                 </label>
               </div>
             </div>
-            <div className="slide-panel-footer">
-              <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={saveEvent}>Create Session</button>
+            <div className="slide-panel-footer" style={{ justifyContent: 'space-between' }}>
+              {editingEvent ? (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={deleteEvent}
+                  disabled={saving}
+                  style={{ color: '#991b1b', display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Trash2 size={14} /> Delete
+                </button>
+              ) : <div />}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="btn btn-secondary" onClick={closeForm} disabled={saving}>Cancel</button>
+                <button
+                  className="btn btn-primary"
+                  onClick={saveEvent}
+                  disabled={saving || !form.name.trim() || !form.date}
+                >
+                  {saving ? 'Saving…' : editingEvent ? 'Save changes' : 'Create Session'}
+                </button>
+              </div>
             </div>
           </div>
         </>
