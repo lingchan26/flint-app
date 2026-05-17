@@ -9,9 +9,17 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 
-const SUMMARY_PROMPT = (briefText) => `You are summarising a creative project brief for a freelancer's records. Read the brief below and write a concise 3-5 sentence summary in plain English. Focus on: what kind of project it is, who the client is, what's being delivered, and any notable constraints or context. Be neutral and professional.
+const SUMMARY_PROMPT = (briefText) => `You are summarising a freelance project for the freelancer's own records — like a concise internal notebook entry they can scan later.
 
-Brief:
+The input below contains structured project details (client, stage, dates, value, etc.) followed by a free-form description and possibly notes and attachments. Read it all and write a 3-5 sentence summary in plain English that:
+- Identifies the kind of project and the client
+- Captures the key deliverables, timeline, and constraints worth remembering
+- Notes anything unusual or risky (tight deadline, low win probability, unclear scope, etc.)
+- Stays neutral and professional — no marketing fluff
+
+Do not list the fields back. Synthesise them into flowing prose.
+
+Project context:
 ${briefText}
 
 Summary:`;
