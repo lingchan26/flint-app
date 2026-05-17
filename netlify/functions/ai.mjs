@@ -24,6 +24,42 @@ ${briefText}
 
 Summary:`;
 
+const EXTRACT_PROMPT = (briefText) => `You are extracting structured project fields from a client brief for a freelancer's project management tool.
+
+The brief below is raw text — could be a client email, a written brief, or rough notes. Your job is to extract the following fields ONLY if they are clearly stated or strongly implied in the brief. If a field is not mentioned or you're guessing, return null for that field. Do NOT invent values.
+
+Return your answer as valid JSON only — no preamble, no code fences, no explanation. Use this exact schema:
+
+{
+  "project_name": string | null,         // e.g. "Brand Refresh - Acme Coffee"
+  "client": string | null,                // person or company name; prefer full name + company if both stated
+  "service_type": string | null,          // one of: Branding, Web Design, Photography, Motion, Print, Digital, CGI, Advertising, Marketing, Other
+  "value": number | null,                 // total project value in numbers only (no currency symbol, no commas); if a range like "10-15K" use the midpoint
+  "start_date": string | null,            // YYYY-MM-DD format only
+  "end_date": string | null,              // YYYY-MM-DD format only
+  "description": string,                  // ALWAYS provide this — a 2-4 sentence summary of what the project actually is, deliverables, and key constraints. This is the only field that should never be null.
+  "notes": string | null,                 // any risks, watch-outs, stakeholder issues, scope concerns, things the freelancer should remember
+  "confidence": {
+    "project_name": "high" | "medium" | "low" | null,
+    "client": "high" | "medium" | "low" | null,
+    "service_type": "high" | "medium" | "low" | null,
+    "value": "high" | "medium" | "low" | null,
+    "start_date": "high" | "medium" | "low" | null,
+    "end_date": "high" | "medium" | "low" | null
+  }
+}
+
+Confidence guide:
+- "high" = stated clearly and unambiguously in the brief
+- "medium" = stated but ambiguous or implied (e.g. "around 10-15K" for value)
+- "low" = inferred from weak signals
+- null = not in the brief at all (the field itself should also be null in this case)
+
+Client brief:
+${briefText}
+
+Return JSON only:`;
+
 const REVERSE_BRIEF_PROMPT = (briefText) => `You are an expert creative strategist helping a freelancer organise a client brief. The freelancer has provided text from a client (email, message, or rough notes). Your job is to:
 
 1. Extract structured information into the fields below. If a field isn't covered, infer reasonably from context. Each field should be 1-3 sentences.
@@ -97,6 +133,9 @@ export default async (request) => {
   } else if (mode === 'reverse-brief') {
     prompt = REVERSE_BRIEF_PROMPT(text);
     maxTokens = 2500;
+  } else if (mode === 'extract') {
+    prompt = EXTRACT_PROMPT(text);
+    maxTokens = 1500;
   } else {
     return jsonError(400, `Unknown mode: ${mode}`);
   }
@@ -119,8 +158,6 @@ export default async (request) => {
       .trim();
 
     if (mode === 'reverse-brief') {
-      // Try to parse the JSON the model returned. If parsing fails, return an
-      // error rather than half-cooked output.
       const cleaned = stripCodeFences(responseText);
       let parsed;
       try {
@@ -129,6 +166,28 @@ export default async (request) => {
         return jsonError(502, 'AI returned a non-JSON response. Please try again.');
       }
       return jsonOk({ brief: parsed.brief || {}, email: parsed.email || '' });
+    }
+
+    if (mode === 'extract') {
+      const cleaned = stripCodeFences(responseText);
+      let parsed;
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch (e) {
+        return jsonError(502, 'AI returned a non-JSON response. Please try again.');
+      }
+      // Defensive: always return a description even if the AI omitted it
+      return jsonOk({
+        project_name: parsed.project_name ?? null,
+        client: parsed.client ?? null,
+        service_type: parsed.service_type ?? null,
+        value: parsed.value ?? null,
+        start_date: parsed.start_date ?? null,
+        end_date: parsed.end_date ?? null,
+        description: parsed.description ?? '',
+        notes: parsed.notes ?? null,
+        confidence: parsed.confidence ?? {},
+      });
     }
 
     return jsonOk({ summary: responseText });
