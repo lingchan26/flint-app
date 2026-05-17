@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Plus, X, Eye, Code2, Edit2, GripVertical, Trash2, Copy, CheckCircle,
   Link, Settings, ChevronRight, Users, FileText, Zap, ExternalLink,
   ToggleLeft, AlignLeft, Hash, Mail, Phone, Calendar, List, Type,
+  AlertCircle, Loader,
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 /* ─── Constants ─── */
 const FIELD_TYPES = [
@@ -38,48 +40,50 @@ const defaultFormSettings = {
   autoFollowUp: false,
 };
 
-const demoForms = [
-  {
-    id: 1,
-    name: 'New Client Inquiry',
-    status: 'Active',
-    submissions: 14,
-    lastSubmission: '2 days ago',
-    conversionRate: 62,
-    fields: defaultFields,
-    settings: { ...defaultFormSettings, brandColor: '#f59e0b' },
-    createdAt: '12 Mar 2026',
-  },
-  {
-    id: 2,
-    name: 'Photography Enquiry',
-    status: 'Active',
-    submissions: 7,
-    lastSubmission: '5 days ago',
-    conversionRate: 44,
-    fields: defaultFields.slice(0, 5),
-    settings: { ...defaultFormSettings, heading: 'Book a shoot', brandColor: '#8b5cf6' },
-    createdAt: '28 Feb 2026',
-  },
-  {
-    id: 3,
-    name: 'Brand Refresh Waitlist',
-    status: 'Inactive',
-    submissions: 31,
-    lastSubmission: '3 weeks ago',
-    conversionRate: 88,
-    fields: defaultFields.slice(0, 3),
-    settings: { ...defaultFormSettings, heading: 'Join the waitlist', brandColor: '#3b82f6' },
-    createdAt: '15 Jan 2026',
-  },
-];
+/* ─── Helpers to map between DB rows and the UI shape ─── */
+function rowToForm(r) {
+  return {
+    id: r.id,
+    name: r.name,
+    fields: Array.isArray(r.fields) && r.fields.length > 0 ? r.fields : defaultFields,
+    status: r.active ? 'Active' : 'Inactive',
+    settings: {
+      ...defaultFormSettings,
+      ...(r.settings || {}),
+      notifyEmail: r.followup_email || '',
+      autoProject: r.auto_create_project,
+      autoContact: r.auto_create_contact,
+      autoFollowUp: r.auto_followup,
+    },
+    submissions: r.submissions_count || 0,
+    conversionRate: 0, // not tracked yet
+    lastSubmission: '—',
+    createdAt: r.created_at ? new Date(r.created_at).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
+    raw: r,
+  };
+}
 
-const demoSubmissions = [
-  { id: 1, formId: 1, name: 'Sarah Wong', email: 'sarah@lumeco.sg', project: 'Brand Identity', budget: 'S$15,000 – 50,000', date: '9 May 2026', status: 'New' },
-  { id: 2, formId: 1, name: 'James Teo', email: 'james@vertexinc.com', project: 'Packaging Design', budget: 'S$5,000 – 15,000', date: '7 May 2026', status: 'Contacted' },
-  { id: 3, formId: 1, name: 'Mei Lin', email: 'meilin@bloom.co', project: 'Digital Marketing', budget: 'Under S$5,000', date: '5 May 2026', status: 'Converted' },
-  { id: 4, formId: 1, name: 'Arjun Sharma', email: 'arjun@novutech.io', project: 'Motion / Video', budget: 'S$15,000 – 50,000', date: '4 May 2026', status: 'New' },
-];
+function rowToSubmission(r, formFields) {
+  const d = r.data || {};
+  // Best-effort extraction of common fields
+  const findValue = (matchers) => {
+    for (const key of Object.keys(d)) {
+      const lk = key.toLowerCase();
+      if (matchers.some(m => lk.includes(m))) return d[key];
+    }
+    return '';
+  };
+  return {
+    id: r.id,
+    name: findValue(['name']) || '—',
+    email: findValue(['email']) || '',
+    project: findValue(['project', 'type']) || '',
+    budget: findValue(['budget']) || '',
+    date: r.created_at ? new Date(r.created_at).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
+    status: 'New',
+    data: d,
+  };
+}
 
 /* ─── Live Form Preview ─── */
 function FormPreview({ fields, settings }) {
@@ -392,12 +396,39 @@ function FormBuilder({ form, onSave, onBack }) {
 
 /* ─── Submissions view ─── */
 function SubmissionsView({ form, onBack }) {
-  const subs = demoSubmissions.filter(s => s.formId === form.id);
+  const [subs, setSubs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('lead_submissions')
+          .select('*')
+          .eq('form_id', form.id)
+          .order('created_at', { ascending: false });
+        if (cancelled) return;
+        if (error) throw error;
+        setSubs((data || []).map(r => rowToSubmission(r, form.fields)));
+      } catch (e) {
+        if (!cancelled) setError(e.message || 'Could not load submissions');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [form.id]);
+
   const statusColor = {
     New: { bg: '#dbeafe', color: '#1e40af' },
     Contacted: { bg: '#fef3c7', color: '#92400e' },
     Converted: { bg: '#d1fae5', color: '#065f46' },
   };
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
@@ -405,6 +436,22 @@ function SubmissionsView({ form, onBack }) {
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{form.name} — Submissions</h2>
         <span style={{ fontSize: 13, color: 'var(--slate-400)' }}>{subs.length} total</span>
       </div>
+      {error && (
+        <div style={{
+          background: '#fef2f2', border: '1px solid #fecaca',
+          borderRadius: 10, padding: 14, marginBottom: 16,
+          display: 'flex', gap: 10, alignItems: 'flex-start',
+        }}>
+          <AlertCircle size={18} color="#991b1b" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1, fontSize: 13, color: '#7f1d1d' }}>{error}</div>
+        </div>
+      )}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>
+          <Loader size={24} style={{ animation: 'spin 1s linear infinite' }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      ) : (
       <div className="table-container">
         <table>
           <thead>
@@ -415,14 +462,13 @@ function SubmissionsView({ form, onBack }) {
               <th>Budget</th>
               <th>Date</th>
               <th>Status</th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {subs.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '40px 0', color: 'var(--slate-400)' }}>
-                  No submissions yet — share your form to start collecting leads.
+                <td colSpan={6} style={{ textAlign: 'center', padding: '40px 0', color: 'var(--slate-400)' }}>
+                  No submissions yet — share your form link to start collecting leads.
                 </td>
               </tr>
             ) : subs.map(s => (
@@ -437,39 +483,122 @@ function SubmissionsView({ form, onBack }) {
                     {s.status}
                   </span>
                 </td>
-                <td>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}>View</button>
-                    <button className="btn btn-primary btn-sm" style={{ fontSize: 12 }}>→ Contact</button>
-                  </div>
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
 
 /* ─── Main Component ─── */
 export default function LeadForms() {
-  const [view, setView] = useState('list'); // 'list' | 'builder' | 'submissions' | 'preview'
-  const [forms, setForms] = useState(demoForms);
+  const [view, setView] = useState('list');
+  const [forms, setForms] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeForm, setActiveForm] = useState(null);
   const [previewForm, setPreviewForm] = useState(null);
 
-  const saveForm = (updated) => {
-    setForms(f => {
-      const exists = f.find(x => x.id === updated.id);
-      if (exists) return f.map(x => x.id === updated.id ? updated : x);
-      return [...f, { ...updated, id: Date.now(), submissions: 0, lastSubmission: '—', conversionRate: 0, createdAt: new Date().toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' }) }];
-    });
-  };
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .from('lead_forms')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (cancelled) return;
+        if (error) throw error;
+        setForms((data || []).map(rowToForm));
+      } catch (e) {
+        if (!cancelled) setError(e.message || 'Could not load forms');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function saveForm(updated) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not signed in');
+
+      const payload = {
+        name: updated.name,
+        fields: updated.fields,
+        active: updated.status !== 'Inactive' && updated.status !== 'Draft',
+        auto_create_project: updated.settings?.autoProject !== false,
+        auto_create_contact: updated.settings?.autoContact !== false,
+        auto_followup: !!updated.settings?.autoFollowUp,
+        followup_email: updated.settings?.notifyEmail || null,
+        settings: updated.settings || {},
+      };
+
+      // Existing forms have a UUID (string with dashes); demo "id: Date.now()" is numeric
+      const isExisting = typeof updated.id === 'string' && updated.id.includes('-');
+
+      if (isExisting) {
+        const { data, error } = await supabase
+          .from('lead_forms')
+          .update(payload)
+          .eq('id', updated.id)
+          .select()
+          .single();
+        if (error) throw error;
+        setForms(fs => fs.map(f => f.id === updated.id ? rowToForm(data) : f));
+      } else {
+        const { data, error } = await supabase
+          .from('lead_forms')
+          .insert({ ...payload, user_id: user.id })
+          .select()
+          .single();
+        if (error) throw error;
+        setForms(fs => [rowToForm(data), ...fs]);
+      }
+      setView('list');
+      setActiveForm(null);
+    } catch (e) {
+      setError(e.message || 'Could not save form');
+    }
+  }
+
+  async function toggleFormStatus(form) {
+    const next = form.status === 'Active' ? false : true;
+    try {
+      const { data, error } = await supabase
+        .from('lead_forms')
+        .update({ active: next })
+        .eq('id', form.id)
+        .select()
+        .single();
+      if (error) throw error;
+      setForms(fs => fs.map(f => f.id === form.id ? rowToForm(data) : f));
+    } catch (e) {
+      setError(e.message || 'Could not update form status');
+    }
+  }
+
+  async function deleteForm(form) {
+    if (!confirm(`Delete "${form.name}"? This cannot be undone.`)) return;
+    try {
+      const { error } = await supabase.from('lead_forms').delete().eq('id', form.id);
+      if (error) throw error;
+      setForms(fs => fs.filter(f => f.id !== form.id));
+    } catch (e) {
+      setError(e.message || 'Could not delete form');
+    }
+  }
 
   const newForm = () => {
     const blankForm = {
-      id: Date.now(),
+      id: Date.now(), // numeric, marks it as "new"
       name: 'Untitled Form',
       status: 'Draft',
       submissions: 0,
@@ -499,6 +628,9 @@ export default function LeadForms() {
     );
   }
 
+  const totalSubmissions = forms.reduce((s, f) => s + (f.submissions || 0), 0);
+  const activeCount = forms.filter(f => f.status === 'Active').length;
+
   return (
     <div className="page-content">
       <div className="page-header">
@@ -513,12 +645,33 @@ export default function LeadForms() {
         </button>
       </div>
 
+      {error && (
+        <div style={{
+          background: '#fef2f2', border: '1px solid #fecaca',
+          borderRadius: 10, padding: 14, marginBottom: 16,
+          display: 'flex', gap: 10, alignItems: 'flex-start',
+        }}>
+          <AlertCircle size={18} color="#991b1b" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1, fontSize: 13, color: '#7f1d1d' }}>{error}</div>
+          <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7f1d1d' }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af' }}>
+          <Loader size={28} style={{ animation: 'spin 1s linear infinite' }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      ) : (
+      <>
       {/* Stats row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>
         {[
-          { label: 'Total Submissions', value: forms.reduce((s, f) => s + f.submissions, 0), color: '#3b82f6', bg: '#dbeafe' },
-          { label: 'Active Forms', value: forms.filter(f => f.status === 'Active').length, color: '#10b981', bg: '#d1fae5' },
-          { label: 'Avg. Conversion', value: `${Math.round(forms.reduce((s, f) => s + f.conversionRate, 0) / forms.length)}%`, color: '#f59e0b', bg: '#fef3c7' },
+          { label: 'Total Submissions', value: totalSubmissions, color: '#3b82f6', bg: '#dbeafe' },
+          { label: 'Active Forms', value: activeCount, color: '#10b981', bg: '#d1fae5' },
+          { label: 'Total Forms', value: forms.length, color: '#f59e0b', bg: '#fef3c7' },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <div className="stat-icon" style={{ background: s.bg }}>
@@ -532,15 +685,30 @@ export default function LeadForms() {
         ))}
       </div>
 
-      {/* Forms grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+      {forms.length === 0 ? (
+        <div className="card" style={{ padding: 48, textAlign: 'center' }}>
+          <div style={{
+            width: 56, height: 56, margin: '0 auto 16px', borderRadius: 14,
+            background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <FileText size={26} color="#f59e0b" />
+          </div>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>No lead forms yet</div>
+          <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 18, maxWidth: 380, margin: '0 auto 18px' }}>
+            Build a form, drop it on your website or share the link — submissions land here automatically.
+          </div>
+          <button className="btn btn-primary" onClick={newForm}>
+            <Plus size={16} /> Create your first form
+          </button>
+        </div>
+      ) : (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
         {forms.map(frm => (
           <div
             key={frm.id}
             className="card"
             style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
           >
-            {/* Colored header */}
             <div style={{
               background: frm.settings.brandColor, padding: '20px 20px 16px',
               position: 'relative',
@@ -557,14 +725,18 @@ export default function LeadForms() {
               </span>
             </div>
 
-            {/* Stats */}
             <div style={{ padding: '14px 20px', flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, color: 'var(--slate-900)' }}>{frm.name}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--slate-900)' }}>{frm.name}</div>
+                <label className="toggle" style={{ flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                  <input type="checkbox" checked={frm.status === 'Active'} onChange={() => toggleFormStatus(frm)} />
+                  <span className="toggle-slider" />
+                </label>
+              </div>
               <div style={{ display: 'flex', gap: 16, marginBottom: 14 }}>
                 {[
                   { label: 'Submissions', value: frm.submissions },
-                  { label: 'Conversion', value: `${frm.conversionRate}%` },
-                  { label: 'Last submission', value: frm.lastSubmission },
+                  { label: 'Created', value: frm.createdAt || '—' },
                 ].map(stat => (
                   <div key={stat.label}>
                     <div style={{ fontSize: 11, color: 'var(--slate-400)', marginBottom: 2 }}>{stat.label}</div>
@@ -574,12 +746,11 @@ export default function LeadForms() {
               </div>
             </div>
 
-            {/* Actions */}
             <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 6 }}>
               <button
                 className="btn btn-ghost btn-sm"
                 style={{ fontSize: 12, flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 4 }}
-                onClick={() => { setPreviewForm(frm); }}
+                onClick={() => setPreviewForm(frm)}
               >
                 <Eye size={12} /> Preview
               </button>
@@ -597,11 +768,18 @@ export default function LeadForms() {
               >
                 <Edit2 size={12} /> Edit
               </button>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: 12, padding: '6px 8px', color: '#991b1b' }}
+                onClick={() => deleteForm(frm)}
+                title="Delete"
+              >
+                <Trash2 size={12} />
+              </button>
             </div>
           </div>
         ))}
 
-        {/* Add new form card */}
         <button
           onClick={newForm}
           style={{
@@ -620,8 +798,10 @@ export default function LeadForms() {
           <div style={{ fontSize: 12 }}>Drag fields, set branding, share link</div>
         </button>
       </div>
+      )}
+      </>
+      )}
 
-      {/* Form preview modal */}
       {previewForm && (
         <>
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100 }} onClick={() => setPreviewForm(null)} />
