@@ -122,6 +122,7 @@ function NewProjectPanel({ onClose, onSave, existingContacts }) {
   const [contactSearch, setContactSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
   const filteredContacts = contactSearch
     ? existingContacts.filter(c => c.toLowerCase().includes(contactSearch.toLowerCase()) && !form.assignContacts.includes(c))
@@ -138,11 +139,20 @@ function NewProjectPanel({ onClose, onSave, existingContacts }) {
   };
 
   const save = async () => {
-    if (!form.name) return;
+    if (!form.name) {
+      setSaveError('Project name is required.');
+      return;
+    }
     setSaving(true);
-    await onSave(form);
-    setSaving(false);
-    onClose();
+    setSaveError(null);
+    try {
+      await onSave(form);
+      onClose();
+    } catch (e) {
+      setSaveError(e.message || 'Something went wrong while saving. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -312,7 +322,16 @@ function NewProjectPanel({ onClose, onSave, existingContacts }) {
             <textarea className="form-textarea" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any notes about this project…" style={{ minHeight: 100 }} />
           </div>
         </div>
-        <div className="slide-panel-footer" style={{ justifyContent: 'stretch' }}>
+        <div className="slide-panel-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+          {saveError && (
+            <div style={{
+              background: '#fef2f2', border: '1px solid #fecaca',
+              borderRadius: 8, padding: '10px 12px',
+              fontSize: 13, color: '#7f1d1d',
+            }}>
+              <strong>Could not create project:</strong> {saveError}
+            </div>
+          )}
           <button className="btn btn-primary" onClick={save} disabled={saving} style={{ width: '100%', justifyContent: 'center', fontSize: 15 }}>
             {saving ? <><Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> Creating…</> : 'Create Project'}
           </button>
@@ -386,6 +405,9 @@ export default function Projects() {
 
   async function saveNew(form) {
     const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('You are not signed in. Please refresh the page and log in again.');
+    }
     const insert = {
       user_id: user.id,
       name: form.name,
@@ -403,9 +425,10 @@ export default function Projects() {
       risk_level: form.riskLevel || 10,
     };
     const { data, error } = await supabase.from('projects').insert(insert).select().single();
-    if (!error && data) {
-      setProjects(p => [rowToProject(data), ...p]);
+    if (error) {
+      throw new Error(error.message || 'Could not save project');
     }
+    setProjects(p => [rowToProject(data), ...p]);
   }
 
   if (selectedProject) {
