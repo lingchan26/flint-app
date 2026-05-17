@@ -229,19 +229,28 @@ function AIBriefBuilder({ onBack }) {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
-  const analyse = () => {
+  const analyse = async () => {
     if (!pastedText.trim() && !fileName) {
       showToast('Please paste a brief or upload a file first.');
       return;
     }
     setLoading(true);
-    // Simulate AI analysis delay
-    setTimeout(() => {
-      setBriefValues(AI_REVERSE_BRIEF);
-      setEmailBody(AI_QUESTIONS_EMAIL);
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'reverse-brief', text: pastedText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'AI request failed');
+      setBriefValues(data.brief || {});
+      setEmailBody(data.email || AI_QUESTIONS_EMAIL);
       setResult(true);
+    } catch (e) {
+      showToast(e.message || 'Could not analyse brief');
+    } finally {
       setLoading(false);
-    }, 2200);
+    }
   };
 
   const copyEmail = () => {
@@ -497,12 +506,31 @@ export default function FormsTemplates() {
   const [aiSummary, setAiSummary] = useState('');
   const [loadingAI, setLoadingAI] = useState(false);
 
-  const generateAI = () => {
+  const generateAI = async () => {
+    // Concatenate the user's brief content from all sections
+    const briefText = Object.entries(briefValues)
+      .filter(([_, v]) => v && String(v).trim())
+      .map(([k, v]) => `${k}: ${v}`)
+      .join('\n\n');
+    if (!briefText) {
+      alert('Fill in some sections first so the AI has something to summarise.');
+      return;
+    }
     setLoadingAI(true);
-    setTimeout(() => {
-      setAiSummary(`This creative brief outlines a strategic brand engagement focused on addressing key market challenges and unlocking growth opportunities. The project spans discovery through delivery, with clearly defined creative deliverables aligned to the brand's positioning objectives. The target audience is well-researched, with consumer insights informing both the creative direction and channel strategy.`);
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'summary', text: briefText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'AI request failed');
+      setAiSummary(data.summary || '');
+    } catch (e) {
+      alert(e.message || 'Could not generate summary');
+    } finally {
       setLoadingAI(false);
-    }, 1500);
+    }
   };
 
   return (
