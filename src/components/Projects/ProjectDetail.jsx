@@ -76,9 +76,29 @@ export default function ProjectDetail({ project, onBack, onUpdate }) {
 
   /* ─── AI summary via Netlify Function ─────────────────────────── */
   async function generateAI() {
-    const sourceText = desc?.trim();
-    if (!sourceText) {
-      setError('Add a description first — the AI needs something to summarise.');
+    // Build a structured context from every available field on the project
+    // plus the attachment list. Empty/missing fields are skipped.
+    const parts = [];
+    if (project.name) parts.push(`Project name: ${project.name}`);
+    if (project.client) parts.push(`Client: ${project.client}`);
+    if (project.stage) parts.push(`Stage: ${project.stage}`);
+    if (project.service_type) parts.push(`Service type: ${project.service_type}`);
+    if (project.value) parts.push(`Project value: S$${Number(project.value).toLocaleString()}`);
+    if (project.start_date) parts.push(`Start date: ${project.start_date}`);
+    if (project.end_date || project.date) parts.push(`Due date: ${project.end_date || project.date}`);
+    if (project.lead_source) parts.push(`Lead source: ${project.lead_source}`);
+    if (project.tags?.length) parts.push(`Tags: ${project.tags.join(', ')}`);
+    if (project.risk_level != null) parts.push(`Win probability: ${project.risk_level}%`);
+    if (desc?.trim()) parts.push(`\nDescription / brief:\n${desc.trim()}`);
+    if (project.notes?.trim()) parts.push(`\nNotes:\n${project.notes.trim()}`);
+    if (attachments.length > 0) {
+      parts.push(`\nAttachments on file: ${attachments.map(a => a.filename).join(', ')}`);
+    }
+
+    const sourceText = parts.join('\n');
+
+    if (!sourceText.trim() || (!desc?.trim() && !project.notes?.trim())) {
+      setError('Add a description or notes first — the AI needs some written context to summarise.');
       return;
     }
     setLoadingAI(true);
