@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { FileText, Download, X, Save, Send } from 'lucide-react';
 
 const templates = [
-  { id: 1, name: 'Invoice Template', updated: '1 Apr 2026', type: 'invoice' },
-  { id: 2, name: 'Contractor Agreement', updated: '15 Mar 2026', type: 'contractor' },
-  { id: 3, name: 'Mutual NDA', updated: '10 Mar 2026', type: 'nda' },
-  { id: 4, name: 'Consulting Services Agreement', updated: '5 Mar 2026', type: 'consulting' },
-  { id: 5, name: 'Coaching Services — Statement of Work', updated: '1 Mar 2026', type: 'coaching' },
-  { id: 6, name: 'Creative Brief', updated: '20 Feb 2026', type: 'brief' },
+  { id: 1, name: 'Invoice Template', type: 'invoice' },
+  { id: 2, name: 'Contractor Agreement', type: 'contractor' },
+  { id: 3, name: 'Mutual NDA', type: 'nda' },
+  { id: 4, name: 'Consulting Services Agreement', type: 'consulting' },
+  { id: 5, name: 'Coaching Services — Statement of Work', type: 'coaching' },
+  { id: 6, name: 'Creative Brief', type: 'brief' },
 ];
 
 function InvoiceTemplate({ data, onChange }) {
@@ -326,7 +326,7 @@ export default function FilesTemplates() {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a1a', marginBottom: 3 }}>{t.name}</div>
-                <div style={{ fontSize: 12, color: '#9ca3af' }}>Updated {t.updated}</div>
+                <div style={{ fontSize: 12, color: '#9ca3af' }}>Built-in template</div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
