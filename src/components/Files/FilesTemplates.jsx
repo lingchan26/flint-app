@@ -8,6 +8,26 @@ const templates = [
   { id: 4, name: 'Consulting Services Agreement', type: 'consulting' },
   { id: 5, name: 'Coaching Services — Statement of Work', type: 'coaching' },
   { id: 6, name: 'Creative Brief', type: 'brief' },
+  {
+    id: 7,
+    name: 'Freelance Services Agreement — Singapore',
+    type: 'download',
+    badge: 'SG',
+    badgeColor: '#dc2626',
+    description: 'Freelancer-issued contract for Singapore engagements. Covers fees, IP, confidentiality, termination, and more. Customise in Word.',
+    downloadUrl: 'https://ishqvczbpzfqvkgnvmrb.supabase.co/storage/v1/object/public/Public-Agreement-templates/Freelance-Services-Agreement_Singapore.docx',
+    filename: 'Freelance-Services-Agreement_Singapore.docx',
+  },
+  {
+    id: 8,
+    name: 'Freelance Services Agreement — Australia',
+    type: 'download',
+    badge: 'AU',
+    badgeColor: '#2563eb',
+    description: 'Freelancer-issued contract for Australian engagements. Includes AU-specific tax, GST, and contractor classification wording. Customise in Word.',
+    downloadUrl: 'https://ishqvczbpzfqvkgnvmrb.supabase.co/storage/v1/object/public/Public-Agreement-templates/Freelance-Services-Agreement_Australia.docx',
+    filename: 'Freelance-Services-Agreement_Australia.docx',
+  },
 ];
 
 function InvoiceTemplate({ data, onChange }) {
@@ -319,24 +339,55 @@ export default function FilesTemplates() {
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
               <div style={{
                 width: 44, height: 44, borderRadius: 10,
-                background: '#fef3c7', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                background: t.type === 'download' ? '#f0fdf4' : '#fef3c7',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               }}>
-                <FileText size={20} color="#f59e0b" />
+                <FileText size={20} color={t.type === 'download' ? '#16a34a' : '#f59e0b'} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a1a', marginBottom: 3 }}>{t.name}</div>
-                <div style={{ fontSize: 12, color: '#9ca3af' }}>Built-in template</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a1a' }}>{t.name}</div>
+                  {t.badge && (
+                    <span style={{
+                      background: t.badgeColor, color: '#fff',
+                      fontSize: 10, fontWeight: 700,
+                      padding: '2px 7px', borderRadius: 20,
+                    }}>
+                      {t.badge}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: '#9ca3af' }}>
+                  {t.type === 'download' ? t.description : 'Built-in template'}
+                </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary btn-sm" onClick={() => setOpenTemplate(t)} style={{ flex: 1, justifyContent: 'center' }}>
-                Open
-              </button>
-              <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-                <Download size={13} /> Download
-              </button>
-            </div>
+            {t.type === 'download' ? (
+              <a
+                href={t.downloadUrl}
+                download={t.filename}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  padding: '7px 14px', borderRadius: 8,
+                  background: '#1a1a1a', color: '#fff',
+                  fontSize: 13, fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+              >
+                <Download size={13} /> Download .docx
+              </a>
+            ) : (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-primary btn-sm" onClick={() => setOpenTemplate(t)} style={{ flex: 1, justifyContent: 'center' }}>
+                  Open
+                </button>
+                <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                  <Download size={13} /> Download
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>
